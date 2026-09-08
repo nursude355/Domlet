@@ -1,0 +1,20 @@
+[package]
+name = "slint-dom-example"
+version = "0.1.0"
+edition = "2021"
+license-file = "../LICENSE-MIT"
+description = "Interactive browser example for slint-dom"
+repository = "https://github.com/nursude355/Slint_Dom"
+rust-version = "1.81"
+publish = false
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+slint-dom = { path = ".." }
+wasm-bindgen = "0.2"
+web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement"] }

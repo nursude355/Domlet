@@ -1,0 +1,16 @@
+[package]
+name = "slint-dom-macros"
+description = "Compile-time component generator for slint-dom"
+repository = "https://github.com/nursude355/Slint_Dom"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.81"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "3.0.5", features = ["parsing", "proc-macro"] }

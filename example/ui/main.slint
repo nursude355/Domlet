@@ -1,0 +1,29 @@
+import { Button, LineEdit, CheckBox, Slider } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    title: "Slint DOM";
+    property <bool> enabled: true;
+    property <string> status: "Ready";
+    property <string> command: "";
+    property <bool> armed: false;
+    callback start();
+    callback stop();
+
+    VerticalLayout {
+        Text { text: status; }
+        HorizontalLayout {
+            start-button := Button {
+                text: "Start";
+                enabled: enabled;
+                clicked => { root.start(); }
+            }
+            Button {
+                text: "Stop";
+                clicked => { root.stop(); }
+            }
+        }
+        LineEdit { text: command; placeholder-text: "Command"; }
+        CheckBox { checked: armed; enabled: true; }
+        Slider { minimum: 0; maximum: 100; value: 40; }
+    }
+}
