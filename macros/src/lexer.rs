@@ -101,7 +101,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, String> {
             tokens.push(Token::Number(chars[start..at].iter().collect()));
             continue;
         }
-        if "{}:;<>,().=[]".contains(chars[at]) {
+        if "{}:;<>,().=[]!".contains(chars[at]) {
             tokens.push(Token::Symbol(chars[at]));
             at += 1;
             continue;

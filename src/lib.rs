@@ -5,12 +5,16 @@
 //! the WebAssembly binary.
 
 mod callback;
+mod chart;
 mod dom;
 mod property;
+#[cfg(feature = "rpc")]
+pub mod rpc;
 
 pub use callback::Callback;
+pub use chart::LineChart;
 pub use dom::{DomBuilder, EventBinding};
-pub use property::Property;
+pub use property::{Property, Subscription, UpdateCycle};
 pub use slint_dom_macros::include_ui;
 
 #[doc(hidden)]

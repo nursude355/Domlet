@@ -1,21 +1,51 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::{Rc, Weak},
+};
 
 type Observer<T> = Rc<dyn Fn(&T)>;
+type WeakObserver<T> = Weak<dyn Fn(&T)>;
+
+/// Keeps an observer registered. Dropping it releases the observer and its captures.
+#[must_use = "keep the subscription alive to receive updates"]
+pub struct Subscription {
+    _observer: Box<dyn std::any::Any>,
+}
+
+/// An observer attempted to update a property already being notified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UpdateCycle;
+
+impl std::fmt::Display for UpdateCycle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("cyclic property update")
+    }
+}
+impl std::error::Error for UpdateCycle {}
+
+struct NotifyGuard(Rc<Cell<bool>>);
+impl Drop for NotifyGuard {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
+}
 
 /// A cloneable reactive value used by generated component properties.
 #[derive(Clone)]
 pub struct Property<T> {
     inner: Rc<RefCell<Inner<T>>>,
+    notifying: Rc<Cell<bool>>,
 }
 
 struct Inner<T> {
     value: T,
-    observers: Vec<Observer<T>>,
+    observers: Vec<WeakObserver<T>>,
 }
 
 impl<T: Clone + 'static> Property<T> {
     pub fn new(value: T) -> Self {
         Self {
+            notifying: Rc::new(Cell::new(false)),
             inner: Rc::new(RefCell::new(Inner {
                 value,
                 observers: Vec::new(),
@@ -28,20 +58,44 @@ impl<T: Clone + 'static> Property<T> {
     }
 
     pub fn set(&self, value: T) {
+        self.try_set(value)
+            .expect("cyclic property update; use try_set to handle feedback explicitly");
+    }
+
+    /// Rejects recursive feedback before modifying the value.
+    pub fn try_set(&self, value: T) -> Result<(), UpdateCycle> {
+        if self.notifying.replace(true) {
+            return Err(UpdateCycle);
+        }
+        let _guard = NotifyGuard(self.notifying.clone());
         let observers = {
             let mut inner = self.inner.borrow_mut();
             inner.value = value.clone();
+            inner
+                .observers
+                .retain(|observer| observer.strong_count() > 0);
             inner.observers.clone()
         };
         for observer in observers {
-            observer(&value);
+            if let Some(observer) = observer.upgrade() {
+                observer(&value);
+            }
         }
+        Ok(())
     }
 
-    pub fn observe(&self, observer: impl Fn(&T) + 'static) {
+    pub fn observe(&self, observer: impl Fn(&T) + 'static) -> Subscription {
         let observer: Observer<T> = Rc::new(observer);
-        self.inner.borrow_mut().observers.push(observer.clone());
+        // Initial delivery precedes registration so it cannot call itself.
         observer(&self.get());
+        let mut inner = self.inner.borrow_mut();
+        inner
+            .observers
+            .retain(|observer| observer.strong_count() > 0);
+        inner.observers.push(Rc::downgrade(&observer));
+        Subscription {
+            _observer: Box::new(observer),
+        }
     }
 }
 
@@ -64,11 +118,39 @@ impl<T: std::fmt::Debug + Clone + 'static> std::fmt::Debug for Property<T> {
 mod tests {
     use super::*;
     #[test]
+    fn dropping_subscription_releases_captures() {
+        let property = Property::new(0);
+        let captured = Rc::new(());
+        let weak = Rc::downgrade(&captured);
+        let subscription = property.observe(move |_| {
+            let _ = &captured;
+        });
+        assert!(weak.upgrade().is_some());
+        drop(subscription);
+        assert!(weak.upgrade().is_none());
+        property.set(1);
+    }
+
+    #[test]
+    fn recursive_update_is_rejected_and_later_updates_work() {
+        let property = Property::new(0);
+        let other = property.clone();
+        let subscription = property.observe(move |value| {
+            if *value > 0 {
+                assert_eq!(other.try_set(99), Err(UpdateCycle));
+            }
+        });
+        property.set(1);
+        assert_eq!(property.get(), 1);
+        drop(subscription);
+        assert_eq!(property.try_set(2), Ok(()));
+    }
+    #[test]
     fn observers_receive_initial_and_changed_values() {
         let seen = Rc::new(RefCell::new(Vec::new()));
         let property = Property::new(1);
         let output = seen.clone();
-        property.observe(move |value| output.borrow_mut().push(*value));
+        let _subscription = property.observe(move |value| output.borrow_mut().push(*value));
         property.set(2);
         assert_eq!(*seen.borrow(), vec![1, 2]);
     }
@@ -78,7 +160,7 @@ mod tests {
         let source = Property::new(1);
         let destination = Property::new(0);
         let output = destination.clone();
-        source.observe(move |value| output.set(value * 2));
+        let _subscription = source.observe(move |value| output.set(value * 2));
         source.set(3);
         assert_eq!(destination.get(), 6);
     }

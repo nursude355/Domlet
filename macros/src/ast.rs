@@ -44,4 +44,5 @@ pub enum Value {
     Bool(bool),
     Number(String),
     Identifier(String),
+    NotIdentifier(String),
 }

@@ -1,0 +1,16 @@
+import { Button, LineEdit, CheckBox, Slider } from "std-widgets.slint";
+export component Lifecycle inherits Window {
+    property <string> status: "Ready";
+    property <bool> active: false;
+    property <float> progress: 0.0;
+    callback start();
+    VerticalLayout {
+        label := Text { text: status; }
+        entry := LineEdit { text: status; accepted => { root.start(); } }
+        toggle := CheckBox { checked: active; accessible-label: "Active"; }
+        slider := Slider { minimum: 0; maximum: 100; value: progress; }
+        inactive := Text { text: "Inactive"; visible: !active; }
+        button := Button { text: "Start"; clicked => { root.start(); } }
+        touch := TouchArea { enabled: false; clicked => { root.start(); } }
+    }
+}
