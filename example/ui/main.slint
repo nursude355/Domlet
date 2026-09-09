@@ -5,12 +5,14 @@ export component MainWindow inherits Window {
     property <bool> enabled: true;
     property <string> status: "Ready";
     property <string> command: "";
-    property <bool> armed: false;
+    property <bool> active: false;
+    property <float> progress: 40.0;
     callback start();
     callback stop();
+    callback execute();
 
     VerticalLayout {
-        Text { text: status; }
+        Text { text: status; accessible-role: "text"; }
         HorizontalLayout {
             start-button := Button {
                 text: "Start";
@@ -22,8 +24,13 @@ export component MainWindow inherits Window {
                 clicked => { root.stop(); }
             }
         }
-        LineEdit { text: command; placeholder-text: "Command"; }
-        CheckBox { checked: armed; enabled: true; }
-        Slider { minimum: 0; maximum: 100; value: 40; }
+        HorizontalLayout {
+            LineEdit { text: command; placeholder-text: "Command"; accepted => { root.execute(); } }
+            Button { text: "Send"; clicked => { root.execute(); } }
+        }
+        CheckBox { checked: active; accessible-label: "Active mode"; }
+        Slider { minimum: 0; maximum: 100; value: progress; accessible-label: "Progress"; }
+        graph := Rectangle { height: 160px; accessible-label: "Live chart"; background: #eef4ff; }
+        Text { text: "Inactive"; visible: !active; }
     }
 }
