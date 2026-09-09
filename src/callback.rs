@@ -1,4 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 type Handler = Rc<RefCell<Box<dyn FnMut()>>>;
 
@@ -6,6 +9,7 @@ type Handler = Rc<RefCell<Box<dyn FnMut()>>>;
 #[derive(Clone, Default)]
 pub struct Callback {
     handler: Rc<RefCell<Option<Handler>>>,
+    invoking: Rc<Cell<bool>>,
 }
 
 impl Callback {
@@ -16,10 +20,27 @@ impl Callback {
         self.handler.borrow_mut().take();
     }
     pub fn invoke(&self) {
+        self.try_invoke()
+            .expect("recursive callback invocation; use try_invoke to handle recursion explicitly");
+    }
+
+    /// Returns an error if this callback is already running, including after replacement.
+    pub fn try_invoke(&self) -> Result<(), crate::UpdateCycle> {
+        if self.invoking.replace(true) {
+            return Err(crate::UpdateCycle);
+        }
+        struct Guard(Rc<Cell<bool>>);
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                self.0.set(false);
+            }
+        }
+        let _guard = Guard(self.invoking.clone());
         let handler = self.handler.borrow().clone();
         if let Some(handler) = handler {
             (handler.borrow_mut())();
         }
+        Ok(())
     }
 }
 
@@ -35,6 +56,14 @@ impl std::fmt::Debug for Callback {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recursive_invocation_is_rejected() {
+        let callback = Callback::default();
+        let nested = callback.clone();
+        callback.set(move || assert_eq!(nested.try_invoke(), Err(crate::UpdateCycle)));
+        assert_eq!(callback.try_invoke(), Ok(()));
+        callback.clear();
+    }
     #[test]
     fn handler_can_be_replaced_and_cleared() {
         let count = Rc::new(RefCell::new(0));

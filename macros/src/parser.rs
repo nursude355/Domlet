@@ -58,7 +58,31 @@ impl Parser {
 
     fn component(mut self) -> Result<Component, String> {
         while self.is_ident("import") {
-            self.until_semicolon("import")?;
+            self.bump();
+            self.expect('{')?;
+            loop {
+                let widget = self.ident()?;
+                if !matches!(
+                    widget.as_str(),
+                    "Button" | "LineEdit" | "CheckBox" | "Slider"
+                ) {
+                    return Err(format!("unsupported imported widget `{widget}`"));
+                }
+                if self.eat('}') {
+                    break;
+                }
+                self.expect(',')?;
+                if self.eat('}') {
+                    break;
+                }
+            }
+            if self.ident()? != "from" {
+                return Err("expected `from` in import".into());
+            }
+            if self.value()? != Value::String("std-widgets.slint".into()) {
+                return Err("only std-widgets.slint imports are supported".into());
+            }
+            self.expect(';')?;
         }
         if self.is_ident("export") {
             self.bump();
@@ -228,6 +252,9 @@ impl Parser {
     }
 
     fn value(&mut self) -> Result<Value, String> {
+        if self.eat('!') {
+            return Ok(Value::NotIdentifier(self.ident()?));
+        }
         let value = match self.current().clone() {
             Token::String(v) => Value::String(v),
             Token::Ident(v) if v == "true" => Value::Bool(true),
@@ -238,16 +265,6 @@ impl Parser {
         };
         self.bump();
         Ok(value)
-    }
-
-    fn until_semicolon(&mut self, context: &str) -> Result<(), String> {
-        while !self.eat(';') {
-            if self.current() == &Token::End {
-                return Err(format!("unterminated {context}"));
-            }
-            self.bump();
-        }
-        Ok(())
     }
 }
 
@@ -279,6 +296,16 @@ fn validate_value_type(value: &Value, kind: PropertyKind, context: &str) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_unresolved_imports() {
+        for source in [
+            "import { Button } from \"custom.slint\"; export component App {}",
+            "import garbage; export component App {}",
+            "import { Unknown } from \"std-widgets.slint\"; export component App {}",
+        ] {
+            assert!(parse(source).is_err());
+        }
+    }
     #[test]
     fn parses_properties_ids_bindings_and_callbacks() {
         let component = parse(

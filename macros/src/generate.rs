@@ -75,6 +75,7 @@ pub fn component(component: &Component, source_path: &LitStr) -> Result<TokenStr
             root: ::slint_dom::__private::Element,
             #(#fields,)*
             _events: ::std::vec::Vec<::slint_dom::EventBinding>,
+            _subscriptions: ::std::vec::Vec<::slint_dom::Subscription>,
         }
 
         impl #component_name {
@@ -84,10 +85,11 @@ pub fn component(component: &Component, source_path: &LitStr) -> Result<TokenStr
                 #title
                 #(#initializers)*
                 let mut events = ::std::vec::Vec::new();
+                let mut subscriptions = ::std::vec::Vec::new();
                 let root = dom.element(#root_tag, "sd-component")?;
                 #nodes
                 dom.append(parent, &root)?;
-                Ok(Self { root, #(#constructors,)* _events: events })
+                Ok(Self { root, #(#constructors,)* _events: events, _subscriptions: subscriptions })
             }
 
             pub fn mount_to_body() -> Result<Self, ::slint_dom::__private::JsValue> {
@@ -132,6 +134,12 @@ fn emit_nodes(
         let mut setup = TokenStream::new();
         if let Some(input_type) = spec.input_type {
             setup.extend(quote!(dom.attribute(&#variable, "type", #input_type)?;));
+        }
+        // HTML range inputs default to whole-number steps.  Slint's float
+        // properties must retain their fractional values unless the UI
+        // explicitly chooses a step size.
+        if node.kind == "Slider" && !node.properties.iter().any(|(name, _)| name == "step") {
+            setup.extend(quote!(dom.attribute(&#variable, "step", "any")?;));
         }
 
         for (name, value) in &node.properties {
@@ -208,7 +216,7 @@ fn emit_property(
                 if matches!(kind, "LineEdit" | "TextInput") {
                     Ok(quote!(events.push(dom.bind_input(&#variable, &#binding)?);))
                 } else {
-                    Ok(quote!(dom.bind_text(&#variable, &#binding);))
+                    Ok(quote!(subscriptions.push(dom.bind_text(&#variable, &#binding));))
                 }
             }
             _ => Err(format!(
@@ -230,9 +238,22 @@ fn emit_property(
                     require_binding(properties, binding, PropertyKind::Bool, name)?;
                     let binding = rust_ident(binding)?;
                     if name == "enabled" {
-                        Ok(quote!(dom.bind_enabled(&#variable, &#binding);))
+                        Ok(quote!(subscriptions.push(dom.bind_enabled(&#variable, &#binding));))
                     } else {
-                        Ok(quote!(dom.bind_visible(&#variable, &#binding);))
+                        Ok(quote!(subscriptions.push(dom.bind_visible(&#variable, &#binding));))
+                    }
+                }
+                Value::NotIdentifier(binding) => {
+                    require_binding(properties, binding, PropertyKind::Bool, name)?;
+                    let binding = rust_ident(binding)?;
+                    if name == "enabled" {
+                        Ok(
+                            quote!(subscriptions.push(dom.bind_enabled_inverted(&#variable, &#binding));),
+                        )
+                    } else {
+                        Ok(
+                            quote!(subscriptions.push(dom.bind_visible_inverted(&#variable, &#binding));),
+                        )
                     }
                 }
                 _ => Err(format!("`{name}` requires a bool or bool property")),
@@ -248,8 +269,11 @@ fn emit_property(
             _ => Err("`checked` requires a bool or bool property".into()),
         },
         "placeholder-text" => string_attribute(variable, "placeholder", value),
+        "accessible-label" => string_attribute(variable, "aria-label", value),
+        "accessible-role" => string_attribute(variable, "role", value),
         "source" => string_attribute(variable, "src", value),
-        "value" | "minimum" | "maximum" => scalar_attribute(
+        "value" if kind == "Slider" => slider_value(variable, value, properties),
+        "value" | "minimum" | "maximum" | "step" => scalar_attribute(
             variable,
             match name {
                 "minimum" => "min",
@@ -266,6 +290,30 @@ fn emit_property(
             Ok(quote!(dom.style(&#variable, #css_name, #value)?;))
         }
         _ => Err(format!("unsupported property `{name}`")),
+    }
+}
+
+fn slider_value(
+    variable: &syn::Ident,
+    value: &Value,
+    properties: &HashMap<String, PropertyKind>,
+) -> Result<TokenStream, String> {
+    match value {
+        Value::Identifier(binding) => match properties.get(binding) {
+            Some(PropertyKind::Float) => {
+                let binding = rust_ident(binding)?;
+                Ok(quote!(events.push(dom.bind_slider_f64(&#variable, &#binding)?);))
+            }
+            Some(PropertyKind::Int) => {
+                let binding = rust_ident(binding)?;
+                Ok(quote!(events.push(dom.bind_slider_i32(&#variable, &#binding)?);))
+            }
+            Some(_) => Err(format!(
+                "property `{binding}` has the wrong type for Slider.value"
+            )),
+            None => Err(format!("unknown property binding `{binding}`")),
+        },
+        _ => scalar_attribute(variable, "value", value),
     }
 }
 
@@ -300,16 +348,25 @@ fn validate_css_value(name: &str, value: &str) -> Result<(), String> {
                 return Err(format!("invalid CSS color `{value}`"));
             }
         }
-        return Ok(());
+        if value.starts_with('#')
+            || matches!(
+                value,
+                "transparent" | "black" | "white" | "red" | "green" | "blue"
+            )
+        {
+            return Ok(());
+        }
+        return Err(format!("unsupported background `{value}`; use a hex color"));
     }
-    if value.parse::<f64>().is_ok() {
+    if value == "0" {
         return Ok(());
     }
     for unit in ["px", "rem", "em", "%", "vh", "vw"] {
-        if value
-            .strip_suffix(unit)
-            .is_some_and(|number| number.parse::<f64>().is_ok())
-        {
+        if value.strip_suffix(unit).is_some_and(|number| {
+            number
+                .parse::<f64>()
+                .is_ok_and(|value| value.is_finite() && value >= 0.0)
+        }) {
             return Ok(());
         }
     }
@@ -319,7 +376,7 @@ fn static_value(value: &Value) -> Result<String, String> {
     match value {
         Value::String(v) | Value::Number(v) => Ok(v.clone()),
         Value::Bool(v) => Ok(v.to_string()),
-        Value::Identifier(v) => Err(format!(
+        Value::Identifier(v) | Value::NotIdentifier(v) => Err(format!(
             "dynamic binding `{v}` is not supported for this property"
         )),
     }
@@ -342,7 +399,18 @@ fn require_binding(
 
 fn validate(component: &Component) -> Result<(), String> {
     rust_ident(&component.name)?;
-    let mut fields: HashSet<String> = ["root", "_events"].into_iter().map(str::to_owned).collect();
+    let mut fields: HashSet<String> = [
+        "root",
+        "_events",
+        "_subscriptions",
+        "dom",
+        "events",
+        "subscriptions",
+        "parent",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
     let mut methods: HashSet<String> = ["mount", "mount_to_body", "root", "unmount"]
         .into_iter()
         .map(str::to_owned)
@@ -396,6 +464,9 @@ fn collect_ids(elements: &[Element], output: &mut Vec<String>) {
 }
 
 fn rust_ident(name: &str) -> Result<syn::Ident, String> {
+    if name.starts_with("__node_") {
+        return Err(format!("`{name}` uses a reserved generated prefix"));
+    }
     syn::parse_str::<syn::Ident>(&normalized(name))
         .map_err(|_| format!("`{name}` cannot be exposed as a Rust identifier"))
 }
@@ -444,6 +515,8 @@ const COMMON_PROPERTIES: &[&str] = &[
     "max-height",
     "background",
     "border-radius",
+    "accessible-label",
+    "accessible-role",
 ];
 
 fn widget(kind: &str) -> Result<Widget, String> {
@@ -475,7 +548,7 @@ fn widget(kind: &str) -> Result<Widget, String> {
         "Button" => Widget {
             tag: "button",
             class: "sd-button",
-            input_type: None,
+            input_type: Some("button"),
             properties: &["text"],
         },
         "LineEdit" | "TextInput" => Widget {
@@ -494,7 +567,7 @@ fn widget(kind: &str) -> Result<Widget, String> {
             tag: "input",
             class: "sd-slider",
             input_type: Some("range"),
-            properties: &["value", "minimum", "maximum"],
+            properties: &["value", "minimum", "maximum", "step"],
         },
         "Image" => Widget {
             tag: "img",
@@ -509,9 +582,9 @@ fn widget(kind: &str) -> Result<Widget, String> {
             properties: &[],
         },
         "TouchArea" => Widget {
-            tag: "div",
+            tag: "button",
             class: "sd-touch",
-            input_type: None,
+            input_type: Some("button"),
             properties: &[],
         },
         other => return Err(format!("unsupported Slint element `{other}`")),
@@ -522,7 +595,7 @@ fn widget(kind: &str) -> Result<Widget, String> {
 fn event_name(kind: &str, event: &str) -> Result<&'static str, String> {
     match (kind, event) {
         ("Button" | "TouchArea", "clicked") => Ok("click"),
-        ("LineEdit" | "TextInput", "accepted") => Ok("change"),
+        ("LineEdit" | "TextInput", "accepted") => Ok("accepted"),
         ("LineEdit" | "TextInput", "edited") => Ok("input"),
         ("CheckBox", "toggled") => Ok("change"),
         _ => Err(format!("event `{event}` is not supported on `{kind}`")),
@@ -533,6 +606,24 @@ fn event_name(kind: &str, event: &str) -> Result<&'static str, String> {
 mod tests {
     use super::*;
     use crate::parser;
+    #[test]
+    fn rejects_internal_names_and_invalid_css() {
+        for name in ["dom", "events", "subscriptions", "parent", "__node_0"] {
+            let source = format!("export component App {{ property <bool> {name}: true; }}");
+            let input = parser::parse(&source).unwrap();
+            assert!(
+                component(
+                    &input,
+                    &LitStr::new("ui.slint", proc_macro2::Span::call_site())
+                )
+                .is_err(),
+                "{name}"
+            );
+        }
+        for value in ["12", "NaNpx", "-2px", "12oops"] {
+            assert!(validate_css_value("width", value).is_err(), "{value}");
+        }
+    }
     #[test]
     fn output_contains_state_callback_and_real_dom_calls() {
         let input = parser::parse(r#"export component App inherits Window { property <bool> enabled: true; callback go(); Button { enabled: enabled; clicked => { root.go(); } } }"#).unwrap();

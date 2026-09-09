@@ -1,4 +1,4 @@
-use crate::{Callback, Property};
+use crate::{Callback, Property, Subscription};
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{Document, Element, Event, HtmlInputElement};
 
@@ -53,9 +53,9 @@ impl DomBuilder {
             .map(Into::into)
             .ok_or_else(|| JsValue::from_str("document body is unavailable"))
     }
-    pub fn bind_text(&self, element: &Element, property: &Property<String>) {
+    pub fn bind_text(&self, element: &Element, property: &Property<String>) -> Subscription {
         let element = element.clone();
-        property.observe(move |value| element.set_text_content(Some(value)));
+        property.observe(move |value| element.set_text_content(Some(value)))
     }
     pub fn bind_input(
         &self,
@@ -64,13 +64,16 @@ impl DomBuilder {
     ) -> Result<EventBinding, JsValue> {
         let input = element.clone().dyn_into::<HtmlInputElement>()?;
         let observed_input = input.clone();
-        property.observe(move |value| {
+        let subscription = property.observe(move |value| {
             if observed_input.value() != *value {
                 observed_input.set_value(value);
             }
         });
         let property = property.clone();
-        EventBinding::new(element, "input", move |_| property.set(input.value()))
+        let mut binding =
+            EventBinding::new(element, "input", move |_| property.set(input.value()))?;
+        binding.subscription = Some(subscription);
+        Ok(binding)
     }
     pub fn bind_checked(
         &self,
@@ -79,11 +82,52 @@ impl DomBuilder {
     ) -> Result<EventBinding, JsValue> {
         let input = element.clone().dyn_into::<HtmlInputElement>()?;
         let observed_input = input.clone();
-        property.observe(move |value| observed_input.set_checked(*value));
+        let subscription = property.observe(move |value| observed_input.set_checked(*value));
         let property = property.clone();
-        EventBinding::new(element, "change", move |_| property.set(input.checked()))
+        let mut binding =
+            EventBinding::new(element, "change", move |_| property.set(input.checked()))?;
+        binding.subscription = Some(subscription);
+        Ok(binding)
     }
-    pub fn bind_enabled(&self, element: &Element, property: &Property<bool>) {
+    pub fn bind_slider_f64(
+        &self,
+        element: &Element,
+        property: &Property<f64>,
+    ) -> Result<EventBinding, JsValue> {
+        let input = element.clone().dyn_into::<HtmlInputElement>()?;
+        let observed_input = input.clone();
+        let subscription =
+            property.observe(move |value| observed_input.set_value_as_number(*value));
+        let property = property.clone();
+        let mut binding = EventBinding::new(element, "input", move |_| {
+            let value = input.value_as_number();
+            if value.is_finite() {
+                property.set(value);
+            }
+        })?;
+        binding.subscription = Some(subscription);
+        Ok(binding)
+    }
+    pub fn bind_slider_i32(
+        &self,
+        element: &Element,
+        property: &Property<i32>,
+    ) -> Result<EventBinding, JsValue> {
+        let input = element.clone().dyn_into::<HtmlInputElement>()?;
+        let observed_input = input.clone();
+        let subscription =
+            property.observe(move |value| observed_input.set_value_as_number(f64::from(*value)));
+        let property = property.clone();
+        let mut binding = EventBinding::new(element, "input", move |_| {
+            let value = input.value_as_number();
+            if value.is_finite() && value >= f64::from(i32::MIN) && value <= f64::from(i32::MAX) {
+                property.set(value.round() as i32);
+            }
+        })?;
+        binding.subscription = Some(subscription);
+        Ok(binding)
+    }
+    pub fn bind_enabled(&self, element: &Element, property: &Property<bool>) -> Subscription {
         let element = element.clone();
         property.observe(move |enabled| {
             if *enabled {
@@ -91,9 +135,23 @@ impl DomBuilder {
             } else {
                 let _ = element.set_attribute("disabled", "");
             }
-        });
+        })
     }
-    pub fn bind_visible(&self, element: &Element, property: &Property<bool>) {
+    pub fn bind_enabled_inverted(
+        &self,
+        element: &Element,
+        property: &Property<bool>,
+    ) -> Subscription {
+        let element = element.clone();
+        property.observe(move |enabled| {
+            if *enabled {
+                let _ = element.set_attribute("disabled", "");
+            } else {
+                let _ = element.remove_attribute("disabled");
+            }
+        })
+    }
+    pub fn bind_visible(&self, element: &Element, property: &Property<bool>) -> Subscription {
         let element = element.clone();
         property.observe(move |visible| {
             if *visible {
@@ -101,7 +159,21 @@ impl DomBuilder {
             } else {
                 let _ = element.set_attribute("hidden", "");
             }
-        });
+        })
+    }
+    pub fn bind_visible_inverted(
+        &self,
+        element: &Element,
+        property: &Property<bool>,
+    ) -> Subscription {
+        let element = element.clone();
+        property.observe(move |visible| {
+            if *visible {
+                let _ = element.set_attribute("hidden", "");
+            } else {
+                let _ = element.remove_attribute("hidden");
+            }
+        })
     }
     pub fn listen(
         &self,
@@ -109,7 +181,25 @@ impl DomBuilder {
         event: &str,
         callback: Callback,
     ) -> Result<EventBinding, JsValue> {
-        EventBinding::new(element, event, move |_| callback.invoke())
+        let target = element.clone();
+        if event == "accepted" {
+            return EventBinding::new(element, "keydown", move |event| {
+                if !target.has_attribute("disabled")
+                    && event
+                        .dyn_ref::<web_sys::KeyboardEvent>()
+                        .is_some_and(|key| {
+                            key.key() == "Enter" && !key.is_composing() && !key.repeat()
+                        })
+                {
+                    callback.invoke();
+                }
+            });
+        }
+        EventBinding::new(element, event, move |_| {
+            if !target.has_attribute("disabled") {
+                callback.invoke();
+            }
+        })
     }
     pub fn install_default_style(&self) -> Result<(), JsValue> {
         const ID: &str = "slint-dom-style";
@@ -129,6 +219,7 @@ impl DomBuilder {
 
 /// Keeps a browser event listener alive and unregisters it when dropped.
 pub struct EventBinding {
+    subscription: Option<Subscription>,
     element: Element,
     event: String,
     closure: Closure<dyn FnMut(Event)>,
@@ -143,6 +234,7 @@ impl EventBinding {
         let closure = Closure::wrap(Box::new(handler) as Box<dyn FnMut(Event)>);
         element.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref())?;
         Ok(Self {
+            subscription: None,
             element: element.clone(),
             event: event.into(),
             closure,
