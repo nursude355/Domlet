@@ -9,8 +9,9 @@ publish = false
 [workspace]
 
 [dependencies]
-axum = { version = "0.7", features = ["ws"] }
+axum = { version = "0.8.9", features = ["ws"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
-tower-http = { version = "0.5", features = ["fs"] }
+tower-http = { version = "0.7.1", features = ["fs"] }
 webbrowser = "1"
+slint-dom = "0.1"
