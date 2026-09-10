@@ -3,7 +3,6 @@ use wasm_bindgen::prelude::*;
 
 slint_dom::include_ui!("ui/main.slint");
 
-
 thread_local! {
     static APP: RefCell<Option<RunningApp>> = const { RefCell::new(None) };
 }
