@@ -16,7 +16,10 @@ use tower_http::services::ServeDir;
 async fn main() {
     let app = Router::new()
         .route("/rpc", get(upgrade_rpc))
-        .fallback_service(ServeDir::new("example/pkg"));
+        .fallback_service(ServeDir::new(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../example"
+        )));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
         .expect("port 8080 is unavailable");
@@ -43,7 +46,7 @@ async fn handle_rpc(mut socket: WebSocket) {
             }),
         };
         if socket
-            .send(Message::Text(response.to_string()))
+            .send(Message::Text(response.to_string().into()))
             .await
             .is_err()
         {

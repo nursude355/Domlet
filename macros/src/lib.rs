@@ -24,6 +24,57 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
     let path = PathBuf::from(manifest).join(relative);
     let source = fs::read_to_string(&path)
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
-    let component = parser::parse(&source)?;
+    let component =
+        parser::parse(&source).map_err(|error| format_source_error(relative, &source, error))?;
     generate::component(&component, &LitStr::new(relative, Span::call_site()))
+        .map_err(|error| format!("{relative}: {error}"))
+}
+
+fn format_source_error(relative: &str, source: &str, error: parser::ParseError) -> String {
+    let mut line = 1;
+    let mut column = 1;
+    let mut line_start = 0;
+    for (index, character) in source.chars().enumerate() {
+        if index == error.offset {
+            break;
+        }
+        if character == '\n' {
+            line += 1;
+            column = 1;
+            line_start = index + 1;
+        } else {
+            column += 1;
+        }
+    }
+    let source_line: String = source
+        .chars()
+        .skip(line_start)
+        .take_while(|character| *character != '\n' && *character != '\r')
+        .collect();
+    let gutter_width = line.to_string().len();
+    format!(
+        "{relative}:{line}:{column}: {}\n{:gutter_width$} |\n{line:gutter_width$} | {source_line}\n{:gutter_width$} | {}^",
+        error.message,
+        "",
+        "",
+        " ".repeat(column.saturating_sub(1)),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parser_diagnostics_name_the_slint_line_and_column() {
+        let source = "export component App {\n    Text { text: status; XXX}\n}";
+        let error = parser::parse(source).unwrap_err();
+        let diagnostic = format_source_error("ui/main.slint", source, error);
+        assert!(diagnostic.contains("ui/main.slint:2:"), "{diagnostic}");
+        assert!(
+            diagnostic.contains("Text { text: status; XXX}"),
+            "{diagnostic}"
+        );
+        assert!(diagnostic.contains('^'), "{diagnostic}");
+    }
 }

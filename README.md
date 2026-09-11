@@ -4,6 +4,11 @@
 browser DOM elements. The `.slint` parser is used only while compiling; it is
 not included in the deployed WebAssembly file.
 
+This crate does not generate or rewrite an HTML file. You provide a small HTML
+loader; the generated JavaScript loads the WASM, and Rust creates the UI in the
+browser DOM at runtime. Use the browser's Elements inspector to see those nodes;
+View Page Source and the HTML file on disk still show only the loader.
+
 It is intended for small Rust/WASM control panels, telemetry displays, and
 embedded-device web UIs where a full browser renderer is unnecessary.
 
@@ -11,6 +16,11 @@ embedded-device web UIs where a full browser renderer is unnecessary.
 
 Prerequisites: Rust **1.81+**, the `wasm32-unknown-unknown` target, and
 [`wasm-pack`](https://wasm-bindgen.github.io/wasm-pack/).
+
+On Windows with the MSVC Rust toolchain, also install Visual Studio Build Tools
+with Desktop development with C++ (MSVC x64/x86 tools and a Windows SDK).
+If Cargo reports `link.exe not found`, fix that toolchain installation first;
+no usable browser package has been built yet.
 
 ```bash
 rustup target add wasm32-unknown-unknown
@@ -82,12 +92,29 @@ Create `index.html` in the project root:
 
 ```html
 <!doctype html>
-<meta charset="utf-8">
-<title>My web UI</title>
-<script type="module">
-  import init from "./pkg/my_web_ui.js";
-  init();
-</script>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My web UI</title>
+</head>
+<body>
+  <p id="loading" role="status">Loading UI...</p>
+  <noscript>This UI requires JavaScript and WebAssembly.</noscript>
+  <script type="module">
+    const loading = document.getElementById("loading");
+    try {
+      const { default: init } = await import("./pkg/my_web_ui.js");
+      await init();
+      loading.remove();
+    } catch (error) {
+      loading.setAttribute("role", "alert");
+      loading.textContent = "UI failed to load. Build with wasm-pack and serve this directory over HTTP. " + error;
+      console.error(error);
+    }
+  </script>
+</body>
+</html>
 ```
 
 The JavaScript file name follows the Rust package name with hyphens converted
@@ -102,6 +129,18 @@ python -m http.server 8000
 
 Open <http://localhost:8000>. Use an HTTP server; opening `index.html` directly
 from the filesystem prevents normal WASM module loading in many browsers.
+
+The page should show **Ready** and a **Start** button. Clicking Start changes
+the text to **Running**. `cargo build` or `cargo test` alone does not produce
+the JavaScript loader package. After a successful wasm-pack build, `pkg/`
+contains `my_web_ui.js` and `my_web_ui_bg.wasm`. Serve the project root
+containing `index.html`, not just `pkg/`.
+
+If the page reports a loading error, check the browser Console and Network tabs:
+both package files must load successfully. Check that the import name matches
+your package (or your custom `[lib] name`), rebuild after source changes, and
+reload the page. A runnable copy of this flow is in
+[`test-slint-dom-user/`](test-slint-dom-user/README.md).
 
 ## Supported `.slint` subset
 

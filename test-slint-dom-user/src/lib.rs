@@ -1,14 +1,12 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use wasm_bindgen::prelude::*;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+slint_dom::include_ui!("ui/main.slint");
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+#[wasm_bindgen(start)]
+pub fn start() -> Result<(), JsValue> {
+    let app = MainWindow::mount_to_body()?;
+    let status = app.status_property();
+    app.on_start(move || status.set("Running".into()));
+    std::mem::forget(app);
+    Ok(())
 }
