@@ -11,7 +11,7 @@
   <script type="module">
     const loading = document.getElementById("loading");
     try {
-      const { default: init } = await import("./pkg/test_slint_dom_user.js");
+      const { default: init } = await import("./pkg/app.js");
       await init();
       loading.remove();
     } catch (error) {

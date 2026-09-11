@@ -13,7 +13,7 @@ categories = ["gui", "web-programming", "wasm"]
 
 [workspace]
 resolver = "2"
-members = ["macros", "example"]
+members = ["macros", "example", "test-slint-dom-user"]
 
 [profile.release]
 opt-level = "z"

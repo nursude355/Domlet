@@ -1,13 +1,13 @@
 [package]
 name = "test-slint-dom-user"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+rust-version = "1.81"
+publish = false
 
 [dependencies]
 slint-dom = { path = ".." }
 wasm-bindgen = "0.2"
-
-[workspace]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

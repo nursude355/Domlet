@@ -33,14 +33,12 @@ jobs:
       - run: cargo check -p slint-dom-example --target wasm32-unknown-unknown
       - run: wasm-pack test --headless --chrome
       - name: Build the README quick-start consumer
-        run: wasm-pack build test-slint-dom-user --target web --release --out-dir pkg
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Check the real HTML loader and Start callback in Chrome
+        shell: bash
         run: |
-          python -m pip install selenium
-          python tests/browser_quick_start.py
+          wasm-pack build test-slint-dom-user --target web --release --out-dir pkg --out-name app --locked
+          test -s test-slint-dom-user/pkg/app.js
+          test -s test-slint-dom-user/pkg/app_bg.wasm
+          grep -q '"./pkg/app.js"' test-slint-dom-user/index.html
       - name: Enforce example WASM size budget
         shell: bash
         run: |

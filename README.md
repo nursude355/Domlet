@@ -4,37 +4,44 @@
 browser DOM elements. The `.slint` parser is used only while compiling; it is
 not included in the deployed WebAssembly file.
 
-This crate does not generate or rewrite an HTML file. You provide a small HTML
-loader; the generated JavaScript loads the WASM, and Rust creates the UI in the
-browser DOM at runtime. Use the browser's Elements inspector to see those nodes;
-View Page Source and the HTML file on disk still show only the loader.
-
 It is intended for small Rust/WASM control panels, telemetry displays, and
 embedded-device web UIs where a full browser renderer is unnecessary.
 
 ## Quick start
 
-Prerequisites: Rust **1.81+**, the `wasm32-unknown-unknown` target, and
-[`wasm-pack`](https://wasm-bindgen.github.io/wasm-pack/).
+Follow these steps to see a **Ready** label and a **Start** button at
+<http://localhost:8000>. You need Rust and Python 3 installed.
+No separate Slint installation or RPC server is needed for this example.
 
 On Windows with the MSVC Rust toolchain, also install Visual Studio Build Tools
 with Desktop development with C++ (MSVC x64/x86 tools and a Windows SDK).
 If Cargo reports `link.exe not found`, fix that toolchain installation first;
 no usable browser package has been built yet.
 
+### 1. Create your project
+
+Run these commands in a terminal:
+
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install wasm-pack
 cargo new --lib my-web-ui
 cd my-web-ui
+mkdir ui
 ```
 
-### 1. Add dependencies
+Keep this terminal in `my-web-ui` for all remaining commands.
 
-Put this in `Cargo.toml`. The `cdylib` type makes the crate buildable for the
-browser.
+### 2. Configure Cargo
+
+Replace the entire `Cargo.toml` with:
 
 ```toml
+[package]
+name = "my-web-ui"
+version = "0.1.0"
+edition = "2021"
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -43,7 +50,7 @@ slint-dom = "0.1"
 wasm-bindgen = "0.2"
 ```
 
-### 2. Define the UI
+### 3. Define the UI
 
 Create `ui/main.slint`:
 
@@ -62,7 +69,7 @@ export component MainWindow inherits Window {
 }
 ```
 
-### 3. Mount it from Rust
+### 4. Connect the UI
 
 Replace `src/lib.rs`:
 
@@ -83,10 +90,7 @@ pub fn start() -> Result<(), JsValue> {
 }
 ```
 
-For applications with more state, store the component in a `thread_local!`
-slot instead of using `mem::forget`; see [`example/src/lib.rs`](example/src/lib.rs).
-
-### 4. Add the minimal HTML loader
+### 5. Create the web page
 
 Create `index.html` in the project root:
 
@@ -104,7 +108,7 @@ Create `index.html` in the project root:
   <script type="module">
     const loading = document.getElementById("loading");
     try {
-      const { default: init } = await import("./pkg/my_web_ui.js");
+      const { default: init } = await import("./pkg/app.js");
       await init();
       loading.remove();
     } catch (error) {
@@ -117,30 +121,46 @@ Create `index.html` in the project root:
 </html>
 ```
 
-The JavaScript file name follows the Rust package name with hyphens converted
-to underscores.
-
-### 5. Build and open it
+### 6. Build the UI
 
 ```bash
-wasm-pack build --target web --release --out-dir pkg
+wasm-pack build --target web --release --out-dir pkg --out-name app
+```
+
+Wait for this command to finish successfully before continuing. It creates
+`pkg/app.js` and `pkg/app_bg.wasm`. The fixed output name matches the HTML above,
+even if you later rename your Rust package.
+
+### 7. Open your website
+
+In the same `my-web-ui` directory, run:
+
+```bash
 python -m http.server 8000
 ```
 
-Open <http://localhost:8000>. Use an HTTP server; opening `index.html` directly
-from the filesystem prevents normal WASM module loading in many browsers.
+Use `python3` if that is your Python command. Leave the terminal running and
+open <http://localhost:8000> in your browser. You should see **Ready** and
+**Start**. Click Start: the label changes to **Running**.
 
-The page should show **Ready** and a **Start** button. Clicking Start changes
-the text to **Running**. `cargo build` or `cargo test` alone does not produce
-the JavaScript loader package. After a successful wasm-pack build, `pkg/`
-contains `my_web_ui.js` and `my_web_ui_bg.wasm`. Serve the project root
-containing `index.html`, not just `pkg/`.
+To change your UI, edit `ui/main.slint`, run step 6 again in a second terminal
+in `my-web-ui`, and refresh the page.
 
-If the page reports a loading error, check the browser Console and Network tabs:
-both package files must load successfully. Check that the import name matches
-your package (or your custom `[lib] name`), rebuild after source changes, and
-reload the page. A runnable copy of this flow is in
-[`test-slint-dom-user/`](test-slint-dom-user/README.md).
+### If the UI does not appear
+
+- **Loading UI...** or **UI failed to load**: ensure step 6 succeeded. Open
+  <http://localhost:8000/pkg/app.js>; it must show JavaScript, not a 404 error.
+- **A file listing or an empty page**: serve the directory containing your new
+  `index.html` and `pkg/`. Do not start the server inside `pkg/`. Hard-refresh
+  the page to replace an older cached loader.
+- **A build error**: resolve it before starting the server. `cargo build` alone
+  does not produce the browser package; use the command in step 6.
+
+The HTML loads the UI at runtime, so its source file stays small. If the page
+still fails, include the browser Console error and the wasm-pack output when
+reporting the problem.
+
+A runnable copy is in [`test-slint-dom-user/`](test-slint-dom-user/README.md).
 
 ## Supported `.slint` subset
 

@@ -5,7 +5,7 @@ replace the path dependency with `slint-dom = "0.1"`.
 From the repository root:
 
 ```sh
-wasm-pack build test-slint-dom-user --target web --release --out-dir pkg
+wasm-pack build test-slint-dom-user --target web --release --out-dir pkg --out-name app
 python -m http.server 8000 --directory test-slint-dom-user
 ```
 
