@@ -12,6 +12,7 @@ fn invalid_ui_has_actionable_compiler_errors() {
         ("import", "only std-widgets.slint imports are supported"),
         ("binding", "unknown property binding `missing`"),
         ("css", "invalid CSS size `12`"),
+        ("syntax", "ui/syntax.slint:3:30"),
     ] {
         let output = std::process::Command::new(env!("CARGO"))
             .args(["check", "--offline", "--manifest-path"])
@@ -23,6 +24,13 @@ fn invalid_ui_has_actionable_compiler_errors() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success(), "{binary} unexpectedly compiled");
         assert!(stderr.contains(diagnostic), "{binary}: {stderr}");
+        if binary == "syntax" {
+            assert!(
+                stderr.contains("Text { text: status; XXX}"),
+                "{binary}: {stderr}"
+            );
+            assert!(stderr.contains('^'), "{binary}: {stderr}");
+        }
         assert!(
             !stderr.contains("proc macro panicked"),
             "{binary}: {stderr}"

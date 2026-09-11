@@ -1,27 +1,55 @@
 use crate::{
     ast::{Component, Element, Handler, Property, PropertyKind, Value},
-    lexer::{lex, Token},
+    lexer::{lex_spanned, SpannedToken, Token},
 };
 
-pub fn parse(source: &str) -> Result<Component, String> {
+#[derive(Debug)]
+pub struct ParseError {
+    pub message: String,
+    pub offset: usize,
+}
+
+impl ParseError {
+    #[cfg(test)]
+    fn contains(&self, needle: &str) -> bool {
+        self.message.contains(needle)
+    }
+}
+
+pub fn parse(source: &str) -> Result<Component, ParseError> {
     Parser {
-        tokens: lex(source)?,
+        tokens: lex_spanned(source).map_err(|error| ParseError {
+            message: error.message,
+            offset: error.offset,
+        })?,
         at: 0,
     }
     .component()
 }
 
 struct Parser {
-    tokens: Vec<Token>,
+    tokens: Vec<SpannedToken>,
     at: usize,
 }
 
 impl Parser {
     fn current(&self) -> &Token {
-        &self.tokens[self.at]
+        &self.tokens[self.at].0
+    }
+    fn offset(&self) -> usize {
+        self.tokens[self.at].1
+    }
+    fn error(&self, message: impl Into<String>) -> ParseError {
+        self.error_at(self.offset(), message)
+    }
+    fn error_at(&self, offset: usize, message: impl Into<String>) -> ParseError {
+        ParseError {
+            message: message.into(),
+            offset,
+        }
     }
     fn next_is(&self, symbol: char) -> bool {
-        self.tokens.get(self.at + 1) == Some(&Token::Symbol(symbol))
+        self.tokens.get(self.at + 1).map(|token| &token.0) == Some(&Token::Symbol(symbol))
     }
     fn bump(&mut self) {
         if self.at + 1 < self.tokens.len() {
@@ -31,13 +59,13 @@ impl Parser {
     fn is_ident(&self, expected: &str) -> bool {
         matches!(self.current(), Token::Ident(v) if v == expected)
     }
-    fn ident(&mut self) -> Result<String, String> {
+    fn ident(&mut self) -> Result<String, ParseError> {
         match self.current().clone() {
             Token::Ident(v) => {
                 self.bump();
                 Ok(v)
             }
-            found => Err(format!("expected identifier, found {found:?}")),
+            found => Err(self.error(format!("expected identifier, found {found:?}"))),
         }
     }
     fn eat(&mut self, symbol: char) -> bool {
@@ -48,15 +76,15 @@ impl Parser {
             false
         }
     }
-    fn expect(&mut self, symbol: char) -> Result<(), String> {
+    fn expect(&mut self, symbol: char) -> Result<(), ParseError> {
         if self.eat(symbol) {
             Ok(())
         } else {
-            Err(format!("expected `{symbol}`, found {:?}", self.current()))
+            Err(self.error(format!("expected `{symbol}`, found {:?}", self.current())))
         }
     }
 
-    fn component(mut self) -> Result<Component, String> {
+    fn component(mut self) -> Result<Component, ParseError> {
         while self.is_ident("import") {
             self.bump();
             self.expect('{')?;
@@ -66,7 +94,7 @@ impl Parser {
                     widget.as_str(),
                     "Button" | "LineEdit" | "CheckBox" | "Slider"
                 ) {
-                    return Err(format!("unsupported imported widget `{widget}`"));
+                    return Err(self.error(format!("unsupported imported widget `{widget}`")));
                 }
                 if self.eat('}') {
                     break;
@@ -77,10 +105,10 @@ impl Parser {
                 }
             }
             if self.ident()? != "from" {
-                return Err("expected `from` in import".into());
+                return Err(self.error("expected `from` in import"));
             }
             if self.value()? != Value::String("std-widgets.slint".into()) {
-                return Err("only std-widgets.slint imports are supported".into());
+                return Err(self.error("only std-widgets.slint imports are supported"));
             }
             self.expect(';')?;
         }
@@ -88,7 +116,7 @@ impl Parser {
             self.bump();
         }
         if self.ident()? != "component" {
-            return Err("expected `component` declaration".into());
+            return Err(self.error("expected `component` declaration"));
         }
         let name = self.ident()?;
         let mut root_tag = "div";
@@ -98,7 +126,7 @@ impl Parser {
             if base == "Window" {
                 root_tag = "main";
             } else {
-                return Err(format!("unsupported component base `{base}`"));
+                return Err(self.error(format!("unsupported component base `{base}`")));
             }
         }
         self.expect('{')?;
@@ -108,7 +136,7 @@ impl Parser {
         let mut title = None;
         while !self.eat('}') {
             if self.current() == &Token::End {
-                return Err("unclosed component body".into());
+                return Err(self.error("unclosed component body"));
             }
             if self.is_ident("property") {
                 properties.push(self.property()?);
@@ -118,37 +146,39 @@ impl Parser {
                 callbacks.push(self.callback()?);
                 continue;
             }
+            let first_offset = self.offset();
             let first = self.ident()?;
             if self.current() == &Token::Symbol(':') && self.next_is('=') {
-                children.push(self.element(first)?);
+                children.push(self.element(first, first_offset)?);
             } else if self.eat(':') {
                 if first != "title" {
-                    return Err(format!("unsupported component property `{first}`"));
+                    return Err(self.error(format!("unsupported component property `{first}`")));
                 }
                 if title.is_some() {
-                    return Err("component `title` is assigned more than once".into());
+                    return Err(self.error("component `title` is assigned more than once"));
                 }
                 match self.value()? {
                     Value::String(value) => title = Some(value),
-                    _ => return Err("component `title` requires a string literal".into()),
+                    _ => return Err(self.error("component `title` requires a string literal")),
                 }
                 self.expect(';')?;
             } else {
-                children.push(self.element(first)?);
+                children.push(self.element(first, first_offset)?);
             }
         }
         if self.current() != &Token::End {
-            return Err(format!(
+            return Err(self.error(format!(
                 "unexpected tokens after component: {:?}",
                 self.current()
-            ));
+            )));
         }
         for property in &properties {
             validate_value_type(
                 &property.initial,
                 property.kind,
                 &format!("property `{}`", property.name),
-            )?;
+            )
+            .map_err(|message| self.error(message))?;
         }
         Ok(Component {
             name,
@@ -160,7 +190,7 @@ impl Parser {
         })
     }
 
-    fn property(&mut self) -> Result<Property, String> {
+    fn property(&mut self) -> Result<Property, ParseError> {
         self.bump();
         self.expect('<')?;
         let ty = self.ident()?;
@@ -170,7 +200,7 @@ impl Parser {
             "bool" => PropertyKind::Bool,
             "int" => PropertyKind::Int,
             "float" => PropertyKind::Float,
-            _ => return Err(format!("unsupported property type `{ty}`")),
+            _ => return Err(self.error(format!("unsupported property type `{ty}`"))),
         };
         let name = self.ident()?;
         let initial = if self.eat(':') {
@@ -186,37 +216,47 @@ impl Parser {
         })
     }
 
-    fn callback(&mut self) -> Result<String, String> {
+    fn callback(&mut self) -> Result<String, ParseError> {
         self.bump();
         let name = self.ident()?;
         self.expect('(')?;
         if !self.eat(')') {
-            return Err(format!(
+            return Err(self.error(format!(
                 "callback `{name}` has arguments; only zero-argument callbacks are supported"
-            ));
+            )));
         }
         self.expect(';')?;
         Ok(name)
     }
 
-    fn element(&mut self, first: String) -> Result<Element, String> {
-        let (id, kind) = if self.eat(':') {
+    fn element(&mut self, first: String, first_offset: usize) -> Result<Element, ParseError> {
+        let (id, kind, kind_offset) = if self.eat(':') {
             self.expect('=')?;
-            (Some(first), self.ident()?)
+            let kind_offset = self.offset();
+            (Some(first), self.ident()?, kind_offset)
         } else {
-            (None, first)
+            (None, first, first_offset)
         };
-        self.expect('{')?;
+        if !self.eat('{') {
+            return Err(self.error_at(
+                kind_offset,
+                format!(
+                    "expected `{{` after element `{kind}`, found {:?}",
+                    self.current()
+                ),
+            ));
+        }
         let mut properties = Vec::new();
         let mut handlers = Vec::new();
         let mut children = Vec::new();
         while !self.eat('}') {
             if self.current() == &Token::End {
-                return Err(format!("unclosed `{kind}` element"));
+                return Err(self.error(format!("unclosed `{kind}` element")));
             }
+            let name_offset = self.offset();
             let name = self.ident()?;
             if self.current() == &Token::Symbol(':') && self.next_is('=') {
-                children.push(self.element(name)?);
+                children.push(self.element(name, name_offset)?);
             } else if self.eat(':') {
                 let value = self.value()?;
                 self.expect(';')?;
@@ -225,7 +265,7 @@ impl Parser {
                 self.bump();
                 handlers.push(self.handler(name)?);
             } else {
-                children.push(self.element(name)?);
+                children.push(self.element(name, name_offset)?);
             }
         }
         Ok(Element {
@@ -237,7 +277,7 @@ impl Parser {
         })
     }
 
-    fn handler(&mut self, event: String) -> Result<Handler, String> {
+    fn handler(&mut self, event: String) -> Result<Handler, ParseError> {
         self.expect('{')?;
         if self.is_ident("root") {
             self.bump();
@@ -251,7 +291,7 @@ impl Parser {
         Ok(Handler { event, callback })
     }
 
-    fn value(&mut self) -> Result<Value, String> {
+    fn value(&mut self) -> Result<Value, ParseError> {
         if self.eat('!') {
             return Ok(Value::NotIdentifier(self.ident()?));
         }
@@ -261,7 +301,7 @@ impl Parser {
             Token::Ident(v) if v == "false" => Value::Bool(false),
             Token::Ident(v) => Value::Identifier(v),
             Token::Number(v) => Value::Number(v),
-            found => return Err(format!("expected value, found {found:?}")),
+            found => return Err(self.error(format!("expected value, found {found:?}"))),
         };
         self.bump();
         Ok(value)

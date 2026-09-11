@@ -8,7 +8,22 @@ pub enum Token {
     End,
 }
 
+#[derive(Debug)]
+pub(crate) struct LexError {
+    pub message: String,
+    pub offset: usize,
+}
+
+pub(crate) type SpannedToken = (Token, usize);
+
+#[cfg(test)]
 pub fn lex(source: &str) -> Result<Vec<Token>, String> {
+    lex_spanned(source)
+        .map(|tokens| tokens.into_iter().map(|(token, _)| token).collect())
+        .map_err(|error| error.message)
+}
+
+pub(crate) fn lex_spanned(source: &str) -> Result<Vec<SpannedToken>, LexError> {
     let chars: Vec<char> = source.chars().collect();
     let mut at = 0;
     let mut tokens = Vec::new();
@@ -29,24 +44,31 @@ pub fn lex(source: &str) -> Result<Vec<Token>, String> {
                 at += 1;
             }
             if at + 1 >= chars.len() {
-                return Err("unterminated block comment".into());
+                return Err(LexError {
+                    message: "unterminated block comment".into(),
+                    offset: at,
+                });
             }
             at += 2;
             continue;
         }
         if at + 1 < chars.len() && chars[at] == '=' && chars[at + 1] == '>' {
-            tokens.push(Token::Arrow);
+            tokens.push((Token::Arrow, at));
             at += 2;
             continue;
         }
         if chars[at] == '"' {
+            let start = at;
             at += 1;
             let mut value = String::new();
             while at < chars.len() && chars[at] != '"' {
                 if chars[at] == '\\' {
                     at += 1;
                     if at >= chars.len() {
-                        return Err("unterminated string escape".into());
+                        return Err(LexError {
+                            message: "unterminated string escape".into(),
+                            offset: at,
+                        });
                     }
                     value.push(match chars[at] {
                         'n' => '\n',
@@ -60,10 +82,13 @@ pub fn lex(source: &str) -> Result<Vec<Token>, String> {
                 at += 1;
             }
             if at == chars.len() {
-                return Err("unterminated string".into());
+                return Err(LexError {
+                    message: "unterminated string".into(),
+                    offset: at,
+                });
             }
             at += 1;
-            tokens.push(Token::String(value));
+            tokens.push((Token::String(value), start));
             continue;
         }
         if chars[at] == '#' {
@@ -73,9 +98,12 @@ pub fn lex(source: &str) -> Result<Vec<Token>, String> {
                 at += 1;
             }
             if at - start == 1 {
-                return Err(format!("invalid color at character {start}"));
+                return Err(LexError {
+                    message: "invalid color".into(),
+                    offset: start,
+                });
             }
-            tokens.push(Token::String(chars[start..at].iter().collect()));
+            tokens.push((Token::String(chars[start..at].iter().collect()), start));
             continue;
         }
         if chars[at].is_ascii_alphabetic() || chars[at] == '_' {
@@ -85,7 +113,7 @@ pub fn lex(source: &str) -> Result<Vec<Token>, String> {
             {
                 at += 1;
             }
-            tokens.push(Token::Ident(chars[start..at].iter().collect()));
+            tokens.push((Token::Ident(chars[start..at].iter().collect()), start));
             continue;
         }
         if chars[at].is_ascii_digit()
@@ -98,20 +126,20 @@ pub fn lex(source: &str) -> Result<Vec<Token>, String> {
             {
                 at += 1;
             }
-            tokens.push(Token::Number(chars[start..at].iter().collect()));
+            tokens.push((Token::Number(chars[start..at].iter().collect()), start));
             continue;
         }
         if "{}:;<>,().=[]!".contains(chars[at]) {
-            tokens.push(Token::Symbol(chars[at]));
+            tokens.push((Token::Symbol(chars[at]), at));
             at += 1;
             continue;
         }
-        return Err(format!(
-            "unexpected character `{}` at character {at}",
-            chars[at]
-        ));
+        return Err(LexError {
+            message: format!("unexpected character `{}`", chars[at]),
+            offset: at,
+        });
     }
-    tokens.push(Token::End);
+    tokens.push((Token::End, chars.len()));
     Ok(tokens)
 }
 

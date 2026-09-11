@@ -1,0 +1,12 @@
+import { Button } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    title: "My web UI";
+    property <string> status: "Ready";
+    callback start();
+
+    VerticalLayout {
+        Text { text: status; accessible-role: "status"; }
+        Button { text: "Start"; clicked => { root.start(); } }
+    }
+}
