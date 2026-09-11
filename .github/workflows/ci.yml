@@ -6,9 +6,14 @@ on:
 
 jobs:
   msrv:
-    runs-on: ubuntu-latest
+    name: MSRV (Windows)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: '1.81.0'
@@ -16,9 +21,14 @@ jobs:
       - run: cargo check --workspace --locked
       - run: cargo check -p slint-dom-example --target wasm32-unknown-unknown --locked
   check:
-    runs-on: ubuntu-latest
+    name: Checks (Windows)
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Configure MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -33,26 +43,36 @@ jobs:
       - run: cargo check -p slint-dom-example --target wasm32-unknown-unknown
       - run: wasm-pack test --headless --chrome
       - name: Build the README quick-start consumer
-        shell: bash
+        shell: pwsh
         run: |
           wasm-pack build test-slint-dom-user --target web --release --out-dir pkg --out-name app --locked
-          test -s test-slint-dom-user/pkg/app.js
-          test -s test-slint-dom-user/pkg/app_bg.wasm
-          grep -q '"./pkg/app.js"' test-slint-dom-user/index.html
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($file in @('test-slint-dom-user/pkg/app.js', 'test-slint-dom-user/pkg/app_bg.wasm')) {
+            if ((Get-Item -LiteralPath $file -ErrorAction Stop).Length -eq 0) {
+              throw "Empty browser asset: $file"
+            }
+          }
+          if (-not (Select-String -LiteralPath test-slint-dom-user/index.html -SimpleMatch '"./pkg/app.js"' -Quiet)) {
+            throw 'HTML loader does not reference pkg/app.js'
+          }
       - name: Enforce example WASM size budget
-        shell: bash
+        shell: pwsh
         run: |
           cargo build -p slint-dom-example --release --target wasm32-unknown-unknown
-          bytes=$(stat -c%s target/wasm32-unknown-unknown/release/slint_dom_example.wasm)
-          echo "Raw example WASM: ${bytes} bytes"
-          test "$bytes" -le 700000
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $bytes = (Get-Item -LiteralPath target/wasm32-unknown-unknown/release/slint_dom_example.wasm -ErrorAction Stop).Length
+          Write-Host "Raw example WASM: $bytes bytes"
+          if ($bytes -eq 0 -or $bytes -gt 700000) { throw 'Raw WASM size budget failed' }
       - name: Build and check deployed browser package
-        shell: bash
+        shell: pwsh
         run: |
           wasm-pack build example --target web --release --out-dir pkg --locked
-          bytes=$(stat -c%s example/pkg/slint_dom_example_bg.wasm)
-          echo "Deployed example WASM: ${bytes} bytes"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $bytes = (Get-Item -LiteralPath example/pkg/slint_dom_example_bg.wasm -ErrorAction Stop).Length
+          Write-Host "Deployed example WASM: $bytes bytes"
           # The example deliberately enables the optional JSON-RPC client.
           # Keep a meaningful deployed-package limit without rejecting it.
-          test "$bytes" -le 200000
-          test -s example/pkg/slint_dom_example.js
+          if ($bytes -eq 0 -or $bytes -gt 200000) { throw 'Deployed WASM size budget failed' }
+          if ((Get-Item -LiteralPath example/pkg/slint_dom_example.js -ErrorAction Stop).Length -eq 0) {
+            throw 'Empty JavaScript loader'
+          }
