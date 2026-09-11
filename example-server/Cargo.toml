@@ -14,4 +14,3 @@ serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 tower-http = { version = "0.7.1", features = ["fs"] }
 webbrowser = "1"
-slint-dom = "0.1"
