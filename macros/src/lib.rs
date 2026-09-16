@@ -32,7 +32,7 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
 
 fn format_source_error(relative: &str, source: &str, error: parser::ParseError) -> String {
     let mut line = 1;
-    let mut column = 1;
+    let mut column: u32 = 1;
     let mut line_start = 0;
     for (index, character) in source.chars().enumerate() {
         if index == error.offset {
@@ -57,7 +57,7 @@ fn format_source_error(relative: &str, source: &str, error: parser::ParseError) 
         error.message,
         "",
         "",
-        " ".repeat(column.saturating_sub(1)),
+        " ".repeat(column.saturating_sub(1).try_into().unwrap()),
     )
 }
 
