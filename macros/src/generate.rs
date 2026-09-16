@@ -673,4 +673,52 @@ mod tests {
         .unwrap_err();
         assert!(error.contains("cannot contain children"));
     }
+
+    #[test]
+    fn expected_failed() {
+        let input_result = parser::parse("property <string> status: \"Ready\";   export component App { Text { text: status; } }");
+        println!{"------------------ Input: {input_result:?}"};
+        let input = input_result.err().unwrap();
+        println!("------------------ Error: {input:?}");
+        let m = format!("{input:?}");
+
+        assert!(m.contains("ParseError { message: \"expected `component` declaration\", offset: 9 "));
+    }
+
+    #[test]
+    fn is_supported() {
+        let input_result = parser::parse("export component App { property <string> status: \"Ready\"; Text { text: status; } }");
+        println!{"------------------ Input: {input_result:?}"};
+        let input = input_result.unwrap();
+        let r = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        );
+
+//        println!("------------------ Result: {r:?}");
+
+        let rt = r.unwrap().to_string();
+        println!("------------------ Result String: {rt}");
+
+        
+        assert!(rt.contains("let status = :: slint_dom :: Property :: new (:: std :: string :: String :: from (\"Ready\")) ;"));
+    }
+
+    #[test]
+    fn rejects_unsupported_elements() {
+        let input_result = parser::parse("export component App { Text { text: \"invalid\"; } }");
+        println!{"------------------ Input: {input_result:?}"};
+        let input = input_result.unwrap();
+        let r = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        );
+
+        //        println!("------------------ Result: {r:?}");
+
+        match r {
+            Ok(_) => panic!("expected error"),
+            Err(e) => assert!(e.contains("unsupported Slint element")),
+        }
+    }
 }
