@@ -14,7 +14,9 @@ export component MainWindow inherits Window {
     VerticalLayout {
 //        Text { text: status; accessible-role: "text"; }   // original accepted by current slint-dom
 //        Text { text: status; accessible-role: text; }     // accepted by VSCCode Slint 
-        Text { text: status; }                              // accepted by both
+//        Text { text: status; }                              // accepted by both
+        Text { text: status; XXX: "YYY"; }                     // testing
+
         HorizontalLayout {
             start-button := Button {
                 text: "Start";

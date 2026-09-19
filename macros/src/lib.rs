@@ -26,13 +26,12 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
     let component =
         parser::parse(&source).map_err(|error| format_source_error(relative, &source, error))?;
     let tokens = generate::component(&component, &LitStr::new(relative, Span::call_site()));
-//        .map_err(|error| format!("{relative}: {error}"));
     match tokens {
-        Ok(tokens) => Ok(tokens),
+        Ok(t) => Ok(t),
         Err(error) => {
             let message = format_diagnostic(relative, &source, error.offset, &error.message);
             let stars = "*".repeat(message.lines().next().map_or(20, |line| line.len()) + 2);
-            Err(format!("{}:\n{}\n{}\n{}", relative, stars, message, stars))
+            Err(format!("\n{}\n{}\n{}",  stars, message, stars))
         },
     }
 }
