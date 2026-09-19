@@ -17,6 +17,12 @@ impl ParseError {
 }
 
 pub fn parse(source: &str) -> Result<Component, ParseError> {
+
+    // for testing
+    let error_message = format!("testing compile_error! in parser.rs -{}- ", source);
+    compile_error!(error_message);
+
+
     Parser {
         tokens: lex_spanned(source).map_err(|error| ParseError {
             message: error.message,
@@ -365,8 +371,23 @@ mod tests {
     }
     #[test]
     fn rejects_unknown_root_properties() {
+        println!("------------------ Result: {:?}", parse("export component App { mystery: true; }"));
         assert!(parse("export component App { mystery: true; }")
             .unwrap_err()
             .contains("unsupported"));
     }
+
+    #[test]
+    fn rejects_unsupported_elements() {
+        let input = "export component App { Text { text: \"invalid\"; } }";
+        let r = parse(
+            &input);
+
+        //        println!("------------------ Result: {r:?}");
+
+        match r {
+            Ok(_) => panic!("-------------- expected error"),
+            Err(e) => assert!(e.contains("unsupported Slint element")),
+        }
+    }    
 }

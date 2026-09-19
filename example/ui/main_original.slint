@@ -12,8 +12,7 @@ export component MainWindow inherits Window {
     callback execute();
 
     VerticalLayout {
-        Text { text: status; accessible-role: text; }
-//        Text { text: status; }
+        Text { text: status; accessible-role: "text"; }
         HorizontalLayout {
             start-button := Button {
                 text: "Start";
@@ -31,8 +30,7 @@ export component MainWindow inherits Window {
         }
         CheckBox { checked: active; accessible-label: "Active mode"; }
         Slider { minimum: 0; maximum: 100; value: progress; accessible-label: "Progress"; }
-//        graph := Rectangle { height: 160px; accessible-label: "Live chart"; background: #eef4ff; }
-        graph := Rectangle { height: 160px; background: #eef4ff; }        
+        graph := Rectangle { height: 160px; accessible-label: "Live chart"; background: #eef4ff; }
         Text { text: "Inactive"; visible: !active; }
     }
 }
