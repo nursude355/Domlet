@@ -1,5 +1,6 @@
 #[derive(Debug, PartialEq)]
 pub struct Component {
+    pub offset: usize,
     pub name: String,
     pub root_tag: &'static str,
     pub title: Option<String>,
@@ -10,6 +11,7 @@ pub struct Component {
 
 #[derive(Debug, PartialEq)]
 pub struct Property {
+    pub offset: usize,
     pub name: String,
     pub kind: PropertyKind,
     pub initial: Value,
@@ -25,6 +27,7 @@ pub enum PropertyKind {
 
 #[derive(Debug, PartialEq)]
 pub struct Element {
+    pub offset: usize,
     pub kind: String,
     pub id: Option<String>,
     pub properties: Vec<(String, Value)>,
