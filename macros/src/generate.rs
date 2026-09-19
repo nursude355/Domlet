@@ -4,9 +4,29 @@ use quote::{format_ident, quote};
 use std::collections::{HashMap, HashSet};
 use syn::LitStr;
 
-pub fn component(component: &Component, source_path: &LitStr) -> Result<TokenStream, String> {
-    let component_name = rust_ident(&component.name)?;
-    validate(component)?;
+#[derive(Clone, Debug)]
+pub struct GenerationError {
+    pub message: String,
+    pub offset: usize,
+}
+
+#[cfg(test)]
+impl GenerationError {
+    fn contains(&self, needle: &str) -> bool {
+        self.message.contains(needle)
+    }
+}
+
+pub fn component(
+    component: &Component,
+    source_path: &LitStr,
+) -> Result<TokenStream, GenerationError> {
+    let component_name = rust_ident(&component.name)
+        .map_err(|message| GenerationError { message, offset: component.offset })?;
+    validate(component).map_err(|message| GenerationError {
+        message,
+        offset: component.offset,
+    })?;
 
     let mut property_types = HashMap::new();
     let mut fields = Vec::new();
@@ -14,11 +34,17 @@ pub fn component(component: &Component, source_path: &LitStr) -> Result<TokenStr
     let mut constructors = Vec::new();
     let mut methods = Vec::new();
     for property in &component.properties {
-        let name = rust_ident(&property.name)?;
+        let name = rust_ident(&property.name).map_err(|message| GenerationError {
+            message,
+            offset: property.offset,
+        })?;
         let setter = format_ident!("set_{}", normalized(&property.name));
         let property_handle = format_ident!("{}_property", normalized(&property.name));
         let ty = rust_type(property.kind);
-        let initial = literal(&property.initial, property.kind)?;
+        let initial = literal(&property.initial, property.kind).map_err(|message| GenerationError {
+            message,
+            offset: property.offset,
+        })?;
         property_types.insert(property.name.clone(), property.kind);
         fields.push(quote!(#name: ::slint_dom::Property<#ty>));
         initializers.push(quote!(let #name = ::slint_dom::Property::new(#initial);));
@@ -32,7 +58,10 @@ pub fn component(component: &Component, source_path: &LitStr) -> Result<TokenStr
 
     let mut callback_names = HashSet::new();
     for callback in &component.callbacks {
-        let name = rust_ident(callback)?;
+        let name = rust_ident(callback).map_err(|message| GenerationError {
+            message,
+            offset: component.offset,
+        })?;
         let on_name = format_ident!("on_{}", normalized(callback));
         callback_names.insert(callback.clone());
         fields.push(quote!(#name: ::slint_dom::Callback));
@@ -46,7 +75,10 @@ pub fn component(component: &Component, source_path: &LitStr) -> Result<TokenStr
     let mut ids = Vec::new();
     collect_ids(&component.children, &mut ids);
     for id in &ids {
-        let name = rust_ident(id)?;
+        let name = rust_ident(id).map_err(|message| GenerationError {
+            message,
+            offset: component.offset,
+        })?;
         fields.push(quote!(#name: ::slint_dom::__private::Element));
         constructors.push(quote!(#name));
         methods.push(quote! {
@@ -111,7 +143,7 @@ fn emit_nodes(
     properties: &HashMap<String, PropertyKind>,
     callbacks: &HashSet<String>,
     sequence: &mut usize,
-) -> Result<TokenStream, String> {
+) -> Result<TokenStream, GenerationError> {
     let mut output = TokenStream::new();
     for node in nodes {
         let index = *sequence;
@@ -120,14 +152,24 @@ fn emit_nodes(
             .id
             .as_ref()
             .map(|id| rust_ident(id))
-            .transpose()?
+            .transpose()
+            .map_err(|message| GenerationError {
+                message,
+                offset: node.offset,
+            })?
             .unwrap_or_else(|| format_ident!("__node_{index}"));
-        let spec = widget(&node.kind)?;
+        let spec = widget(&node.kind).map_err(|message| GenerationError {
+            message,
+            offset: node.offset,
+        })?;
         if matches!(spec.tag, "input" | "img") && !node.children.is_empty() {
-            return Err(format!(
+            return Err(GenerationError {
+                offset: node.offset,
+                message: format!(
                 "void element `{}` cannot contain children",
                 node.kind
-            ));
+                ),
+            });
         }
         let mut seen_properties = HashSet::new();
         let mut seen_events = HashSet::new();
@@ -144,38 +186,62 @@ fn emit_nodes(
 
         for (name, value) in &node.properties {
             if !seen_properties.insert(name.as_str()) {
-                return Err(format!(
+                return Err(GenerationError {
+                    offset: node.offset,
+                    message: format!(
                     "property `{name}` is assigned more than once on `{}`",
                     node.kind
-                ));
+                    ),
+                });
             }
             if !spec.properties.contains(&name.as_str())
                 && !COMMON_PROPERTIES.contains(&name.as_str())
             {
-                return Err(format!(
+                return Err(GenerationError {
+                    offset: node.offset,
+                    message: format!(
                     "property `{name}` is not supported on `{}`",
                     node.kind
-                ));
+                    ),
+                });
             }
             setup.extend(emit_property(
                 &variable, &node.kind, name, value, properties,
-            )?);
+            )
+            .map_err(|message| GenerationError {
+                message,
+                offset: node.offset,
+            })?);
         }
         for handler in &node.handlers {
             if !seen_events.insert(handler.event.as_str()) {
-                return Err(format!(
+                return Err(GenerationError {
+                    offset: node.offset,
+                    message: format!(
                     "event `{}` is handled more than once on `{}`",
                     handler.event, node.kind
-                ));
+                    ),
+                });
             }
             if !callbacks.contains(&handler.callback) {
-                return Err(format!(
+                return Err(GenerationError {
+                    offset: node.offset,
+                    message: format!(
                     "event `{}` references undeclared callback `{}`",
                     handler.event, handler.callback
-                ));
+                    ),
+                });
             }
-            let event = event_name(&node.kind, &handler.event)?;
-            let callback = rust_ident(&handler.callback)?;
+            let event = event_name(&node.kind, &handler.event).map_err(|message| {
+                GenerationError {
+                    message,
+                    offset: node.offset,
+                }
+            })?;
+            let callback = rust_ident(&handler.callback).map_err(|message| GenerationError {
+                message,
+                offset: node.offset,
+            })?;
             setup.extend(quote!(events.push(dom.listen(&#variable, #event, #callback.clone())?);));
         }
         let children = emit_nodes(

@@ -188,6 +188,7 @@ impl Parser {
             .map_err(|message| self.error(message))?;
         }
         Ok(Component {
+            offset: 0,
             name,
             root_tag,
             title,
@@ -198,6 +199,7 @@ impl Parser {
     }
 
     fn property(&mut self) -> Result<Property, ParseError> {
+        let offset = self.offset();
         self.bump();
         self.expect('<')?;
         let ty = self.ident()?;
@@ -217,6 +219,7 @@ impl Parser {
         };
         self.expect(';')?;
         Ok(Property {
+            offset,
             name,
             kind,
             initial,
@@ -276,6 +279,7 @@ impl Parser {
             }
         }
         Ok(Element {
+            offset: kind_offset,
             kind,
             id,
             properties,

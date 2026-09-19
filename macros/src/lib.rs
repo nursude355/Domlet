@@ -2,9 +2,6 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use std::{env, fs, path::PathBuf};
 use syn::{parse_macro_input, LitStr};
-use colorful::*;
-
-
 mod ast;
 mod generate;
 mod lexer;
@@ -32,22 +29,24 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
 //        .map_err(|error| format!("{relative}: {error}"));
     match tokens {
         Ok(tokens) => Ok(tokens),
-        Err(message) => {
-            let stars = message.len();
-            let stars = "*".repeat(stars);
-            let m = format!("{}:\n{}\n{}\n{}", relative, stars, message, stars);
-//            let m = m.color(Color::Red).bold().to_string(); // TODO this doesn't work
-            Err(m)
+        Err(error) => {
+            let message = format_diagnostic(relative, &source, error.offset, &error.message);
+            let stars = "*".repeat(message.lines().next().map_or(20, |line| line.len()) + 2);
+            Err(format!("{}:\n{}\n{}\n{}", relative, stars, message, stars))
         },
     }
 }
 
 fn format_source_error(relative: &str, source: &str, error: parser::ParseError) -> String {
+    format_diagnostic(relative, source, error.offset, &error.message)
+}
+
+fn format_diagnostic(relative: &str, source: &str, offset: usize, message: &str) -> String {
     let mut line = 1;
     let mut column: u32 = 1;
     let mut line_start = 0;
     for (index, character) in source.chars().enumerate() {
-        if index == error.offset {
+        if index == offset {
             break;
         }
         if character == '\n' {
@@ -66,7 +65,7 @@ fn format_source_error(relative: &str, source: &str, error: parser::ParseError) 
     let gutter_width = line.to_string().len();
     format!(
         "{relative}:{line}:{column}: {}\n{:gutter_width$} |\n{line:gutter_width$} | {source_line}\n{:gutter_width$} | {}^",
-        error.message,
+        message,
         "",
         "",
         " ".repeat(column.saturating_sub(1).try_into().unwrap()),
