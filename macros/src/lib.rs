@@ -31,7 +31,7 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
         Err(error) => {
             let message = format_diagnostic(relative, &source, error.offset, &error.message);
             let stars = "*".repeat(message.lines().next().map_or(20, |line| line.len()) + 2);
-            Err(format!("\n{}\n{}\n{}",  stars, message, stars))
+            Err(format!("slint-dom:\n{}\n{}\n{}",  stars, message, stars))
         },
     }
 }
