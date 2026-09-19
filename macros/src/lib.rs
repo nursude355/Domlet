@@ -2,6 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::Span;
 use std::{env, fs, path::PathBuf};
 use syn::{parse_macro_input, LitStr};
+use colorful::*;
+
 
 mod ast;
 mod generate;
@@ -26,8 +28,18 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let component =
         parser::parse(&source).map_err(|error| format_source_error(relative, &source, error))?;
-    generate::component(&component, &LitStr::new(relative, Span::call_site()))
-        .map_err(|error| format!("{relative}: {error}"))
+    let tokens = generate::component(&component, &LitStr::new(relative, Span::call_site()));
+//        .map_err(|error| format!("{relative}: {error}"));
+    match tokens {
+        Ok(tokens) => Ok(tokens),
+        Err(message) => {
+            let stars = message.len();
+            let stars = "*".repeat(stars);
+            let m = format!("{}:\n{}\n{}\n{}", relative, stars, message, stars);
+//            let m = m.color(Color::Red).bold().to_string(); // TODO this doesn't work
+            Err(m)
+        },
+    }
 }
 
 fn format_source_error(relative: &str, source: &str, error: parser::ParseError) -> String {

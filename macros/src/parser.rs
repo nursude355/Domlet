@@ -17,11 +17,12 @@ impl ParseError {
 }
 
 pub fn parse(source: &str) -> Result<Component, ParseError> {
-
-    // for testing
-    let error_message = format!("testing compile_error! in parser.rs -{}- ", source);
-    compile_error!(error_message);
-
+//    if source.contains("FORCE_PARSE_ERROR") {
+//        return Err(ParseError {
+//            message: format!("testing parse error in parser.rs -{source}-"),
+//            offset: 0,
+//        });
+//  }
 
     Parser {
         tokens: lex_spanned(source).map_err(|error| ParseError {
@@ -375,6 +376,12 @@ mod tests {
         assert!(parse("export component App { mystery: true; }")
             .unwrap_err()
             .contains("unsupported"));
+    }
+
+    #[test]
+    fn emits_forced_test_error_message() {
+        let error = parse("FORCE_PARSE_ERROR").unwrap_err();
+        assert!(error.message.contains("testing parse error in parser.rs"));
     }
 
     #[test]
