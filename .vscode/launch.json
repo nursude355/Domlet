@@ -1,21 +1,7 @@
 {
   "version": "0.2.0",
   "configurations": [
-    {
-      "name": "Debug slint-dom-macros tests",
-      "type": "lldb",
-      "request": "launch",
-      "sourceLanguages": ["rust"],
-      "cargo": {
-        "args": [
-          "test",
-          "-p",
-          "slint-dom-macros",
-          "--lib"
-        ]
-      },
-      "cwd": "${workspaceFolder}"
-    },
+
     {
       "name": "Debug slint-dom-macros single test",
       "type": "lldb",
