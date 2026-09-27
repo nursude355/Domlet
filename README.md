@@ -189,6 +189,7 @@ Run:
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
+cargo test -p slint-dom-macros parser::tests
 wasm-pack build --target web --release --out-dir pkg
 ```
 
