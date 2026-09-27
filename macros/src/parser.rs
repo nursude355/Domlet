@@ -407,4 +407,22 @@ mod tests {
             Err(e) => assert!(e.contains("unsupported Slint element")),
         }
     }
+
+    #[test]
+    fn supports_accessible_role_enum() {
+        let input = "export component App {Text { text: status; accessible-role: \"text\"; } }";
+        let input = "export component App {Text { text: status; accessible-role: text; } }";
+        let r = parse(&input);
+
+        println!("------------------ Result: {r:?}");
+
+        let _x: Result<(), ParseError> = match r {
+//            Ok(_y) => Ok(()),
+            Ok(_) => panic!("-------------- expected error"),
+            Err(e) => {
+                assert!(e.contains("unsupported Slint elementx"));
+                Ok(())
+            }
+        };
+    }
 }
