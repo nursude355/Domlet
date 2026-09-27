@@ -388,15 +388,19 @@ mod tests {
     #[test]
     fn emits_forced_test_error_message() {
         let error = parse("FORCE_PARSE_ERROR").unwrap_err();
-        assert!(error.message.contains("testing parse error in parser.rs"));
+        println!("------------------ Result: {:?}", error);
+        assert!(error.message.contains("expected `component` declaration"));
+        assert!(error.offset == 17);
+
     }
 
     #[test]
     fn rejects_unsupported_elements() {
-        let input = "export component App { Text { text: \"invalid\"; } }";
+        let input = "export component App { Text { text: invalid; } }";
+        let input = "export component App { Text { textx: \"invalid\"; } }";
         let r = parse(&input);
 
-        //        println!("------------------ Result: {r:?}");
+        println!("------------------ Result: {r:?}");
 
         match r {
             Ok(_) => panic!("-------------- expected error"),
