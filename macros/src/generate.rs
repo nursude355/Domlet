@@ -21,8 +21,10 @@ pub fn component(
     component: &Component,
     source_path: &LitStr,
 ) -> Result<TokenStream, GenerationError> {
-    let component_name = rust_ident(&component.name)
-        .map_err(|message| GenerationError { message, offset: component.offset })?;
+    let component_name = rust_ident(&component.name).map_err(|message| GenerationError {
+        message,
+        offset: component.offset,
+    })?;
     validate(component).map_err(|message| GenerationError {
         message,
         offset: component.offset,
@@ -41,10 +43,11 @@ pub fn component(
         let setter = format_ident!("set_{}", normalized(&property.name));
         let property_handle = format_ident!("{}_property", normalized(&property.name));
         let ty = rust_type(property.kind);
-        let initial = literal(&property.initial, property.kind).map_err(|message| GenerationError {
-            message,
-            offset: property.offset,
-        })?;
+        let initial =
+            literal(&property.initial, property.kind).map_err(|message| GenerationError {
+                message,
+                offset: property.offset,
+            })?;
         property_types.insert(property.name.clone(), property.kind);
         fields.push(quote!(#name: ::slint_dom::Property<#ty>));
         initializers.push(quote!(let #name = ::slint_dom::Property::new(#initial);));
@@ -165,10 +168,7 @@ fn emit_nodes(
         if matches!(spec.tag, "input" | "img") && !node.children.is_empty() {
             return Err(GenerationError {
                 offset: node.offset,
-                message: format!(
-                "void element `{}` cannot contain children",
-                node.kind
-                ),
+                message: format!("void element `{}` cannot contain children", node.kind),
             });
         }
         let mut seen_properties = HashSet::new();
@@ -189,8 +189,8 @@ fn emit_nodes(
                 return Err(GenerationError {
                     offset: node.offset,
                     message: format!(
-                    "property `{name}` is assigned more than once on `{}`",
-                    node.kind
+                        "property `{name}` is assigned more than once on `{}`",
+                        node.kind
                     ),
                 });
             }
@@ -199,27 +199,25 @@ fn emit_nodes(
             {
                 return Err(GenerationError {
                     offset: node.offset,
-                    message: format!(
-                    "property `{name}` is not supported on `{}`",
-                    node.kind
-                    ),
+                    message: format!("property `{name}` is not supported on `{}`", node.kind),
                 });
             }
-            setup.extend(emit_property(
-                &variable, &node.kind, name, value, properties,
-            )
-            .map_err(|message| GenerationError {
-                message,
-                offset: node.offset,
-            })?);
+            setup.extend(
+                emit_property(&variable, &node.kind, name, value, properties).map_err(
+                    |message| GenerationError {
+                        message,
+                        offset: node.offset,
+                    },
+                )?,
+            );
         }
         for handler in &node.handlers {
             if !seen_events.insert(handler.event.as_str()) {
                 return Err(GenerationError {
                     offset: node.offset,
                     message: format!(
-                    "event `{}` is handled more than once on `{}`",
-                    handler.event, node.kind
+                        "event `{}` is handled more than once on `{}`",
+                        handler.event, node.kind
                     ),
                 });
             }
@@ -227,17 +225,16 @@ fn emit_nodes(
                 return Err(GenerationError {
                     offset: node.offset,
                     message: format!(
-                    "event `{}` references undeclared callback `{}`",
-                    handler.event, handler.callback
+                        "event `{}` references undeclared callback `{}`",
+                        handler.event, handler.callback
                     ),
                 });
             }
-            let event = event_name(&node.kind, &handler.event).map_err(|message| {
-                GenerationError {
+            let event =
+                event_name(&node.kind, &handler.event).map_err(|message| GenerationError {
                     message,
                     offset: node.offset,
-                }
-            })?;
+                })?;
             let callback = rust_ident(&handler.callback).map_err(|message| GenerationError {
                 message,
                 offset: node.offset,
@@ -674,7 +671,7 @@ mod tests {
 
     use syn::token;
 
-use super::*;
+    use super::*;
     use crate::parser;
     #[test]
     fn rejects_internal_names_and_invalid_css() {
@@ -781,7 +778,8 @@ use super::*;
     fn rejects_unsupported_elements() {
         use proc_macro2::{Delimiter, TokenTree};
 
-        let input = "export component App { property <string> status: \"Ready\"; Text { text: status; } }";
+        let input =
+            "export component App { property <string> status: \"Ready\"; Text { text: status; } }";
         let input = "export component App { property <string> status: \"Ready\"; } }";
 
         let input_result = parser::parse(input);
@@ -806,8 +804,10 @@ use super::*;
 
         let tokens = r.expect("component generation failed");
 
-        println!("------------------ tokens count: {}", tokens.clone().into_iter().count());
-
+        println!(
+            "------------------ tokens count: {}",
+            tokens.clone().into_iter().count()
+        );
 
         for (i, tt) in tokens.into_iter().enumerate() {
             match tt {
@@ -818,27 +818,31 @@ use super::*;
                     for (j, inner) in group.stream().into_iter().enumerate() {
                         match inner {
                             TokenTree::Group(inner_group) => {
-                                println!("{} - {} nested group: {:?}", i, j, inner_group.delimiter());
+                                println!(
+                                    "{} - {} nested group: {:?}",
+                                    i,
+                                    j,
+                                    inner_group.delimiter()
+                                );
                             }
                             other => {
                                 println!("{} - {} leaf token: {:?}", i, j, other);
                             }
                         }
                     }
-                },
+                }
                 TokenTree::Ident(ident) => {
                     println!("{} top-level ident: {:?}", i, ident);
-                },
+                }
                 TokenTree::Punct(punct) => {
                     println!("{} top-level punct: {:?}", i, punct);
-                },
+                }
                 TokenTree::Literal(lit) => {
                     println!("{} top-level literal: {:?}", i, lit);
-                },
-
-//                other => {
-//                    println!("{} top-level token: {:?}", i, other);
-//                }
+                }
+                //                other => {
+                //                    println!("{} top-level token: {:?}", i, other);
+                //                }
             }
         }
 
@@ -846,7 +850,6 @@ use super::*;
             Ok(_) => panic!("expected error"),
             Err(e) => assert!(e.contains("unsupported Slint element")),
         }
-//        assert_eq!(0, 1);
+        //        assert_eq!(0, 1);
     }
 }
-
