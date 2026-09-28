@@ -184,6 +184,10 @@ fn emit_nodes(
             setup.extend(quote!(dom.attribute(&#variable, "step", "any")?;));
         }
 
+        // Browsers clamp a range input's value to its current bounds, so a
+        // slider's value is applied after `minimum`, `maximum`, and `step`
+        // regardless of their order in the source.
+        let mut deferred = TokenStream::new();
         for (name, value) in &node.properties {
             if !seen_properties.insert(name.as_str()) {
                 return Err(GenerationError {
@@ -202,15 +206,19 @@ fn emit_nodes(
                     message: format!("property `{name}` is not supported on `{}`", node.kind),
                 });
             }
-            setup.extend(
-                emit_property(&variable, &node.kind, name, value, properties).map_err(
-                    |message| GenerationError {
-                        message,
-                        offset: node.offset,
-                    },
-                )?,
-            );
+            let tokens = emit_property(&variable, &node.kind, name, value, properties).map_err(
+                |message| GenerationError {
+                    message,
+                    offset: node.offset,
+                },
+            )?;
+            if node.kind == "Slider" && name == "value" {
+                deferred.extend(tokens);
+            } else {
+                setup.extend(tokens);
+            }
         }
+        setup.extend(deferred);
         for handler in &node.handlers {
             if !seen_events.insert(handler.event.as_str()) {
                 return Err(GenerationError {
@@ -286,6 +294,15 @@ fn emit_property(
                 "`text` on `{kind}` requires a string or string property"
             )),
         },
+        "enabled"
+            if !matches!(
+                kind,
+                "Button" | "TouchArea" | "LineEdit" | "TextInput" | "CheckBox" | "Slider"
+            ) =>
+        {
+            // `disabled` has no effect on the spans and divs used elsewhere.
+            Err(format!("`enabled` is not supported on `{kind}`"))
+        }
         "enabled" | "visible" => {
             let attribute = if name == "enabled" {
                 "disabled"
@@ -813,6 +830,38 @@ mod tests {
                 "{source}"
             );
         }
+    }
+
+    #[test]
+    fn slider_value_is_bound_after_its_bounds() {
+        let input = parser::parse(
+            "export component App { property <float> level: 150; Slider { value: level; maximum: 200; } }",
+        )
+        .unwrap();
+        let output = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap()
+        .to_string();
+        let maximum = output.find("\"max\"").unwrap();
+        let value = output.find("bind_slider_f64").unwrap();
+        assert!(maximum < value, "{output}");
+    }
+
+    #[test]
+    fn rejects_enabled_on_non_controls() {
+        let input = parser::parse("export component App { Text { text: \"x\"; enabled: false; } }")
+            .unwrap();
+        let error = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("`enabled` is not supported on `Text`"),
+            "{error}"
+        );
     }
 
     #[test]

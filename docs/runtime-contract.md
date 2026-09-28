@@ -35,7 +35,9 @@ observers, returning `UpdateCycle` without modifying that property's value.
 `try_invoke` similarly rejects recursive callback invocation. The convenience
 methods `set` and `invoke` panic on these programming errors. Use the fallible
 methods when handling user-defined feedback. Earlier changes in a chain are
-not rolled back when a later update is rejected.
+not rolled back when a later update is rejected. Generated event listeners
+use `try_invoke`: a handler which synchronously re-dispatches its own event
+(for example with `element.click()`) does not run again recursively.
 
 Only imports from `std-widgets.slint` for supported standard widgets are accepted.
 Unsupported imports, duplicate members, reserved generated identifiers, invalid
@@ -44,8 +46,12 @@ must be non-negative finite values with a supported unit, or unitless zero.
 
 `accepted` fires on Enter (excluding key repeats and IME composition), while
 `edited` fires on input. Disabled elements do not invoke generated callbacks.
+`enabled` is accepted only on interactive elements (`Button`, `TouchArea`,
+`LineEdit`, `TextInput`, `CheckBox`, `Slider`).
 Buttons explicitly use `type="button"` to avoid submitting enclosing forms.
-Float sliders use `step="any"` unless an explicit `step` is specified.
+Float sliders use `step="any"` unless an explicit `step` is specified. A
+slider's value is applied after its bounds, whatever their source order, so
+browsers do not clamp it to the default range.
 
 Enable the optional `rpc` feature for the browser JSON-RPC 2.0 WebSocket
 transport. It owns its JavaScript callbacks, disconnects on drop, and passes
