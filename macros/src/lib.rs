@@ -41,9 +41,9 @@ fn format_source_error(relative: &str, source: &str, error: parser::ParseError) 
 }
 
 fn format_diagnostic(relative: &str, source: &str, offset: usize, message: &str) -> String {
-    let mut line = 1;
-    let mut column: u32 = 1;
-    let mut line_start = 0;
+    let mut line: usize = 1;
+    let mut column: usize = 1;
+    let mut line_start: usize = 0;
     for (index, character) in source.chars().enumerate() {
         if index == offset {
             break;

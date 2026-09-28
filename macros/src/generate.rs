@@ -333,7 +333,8 @@ fn emit_property(
         },
         "placeholder-text" => string_attribute(variable, "placeholder", value),
         "accessible-label" => string_attribute(variable, "aria-label", value),
-        "accessible-role" => string_attribute(variable, "role", value),
+        "accessible-role" => accessible_role(variable, value),
+        "accessible-live-region" => accessible_live_region(variable, value),
         "source" => string_attribute(variable, "src", value),
         "value" if kind == "Slider" => slider_value(variable, value, properties),
         "value" | "minimum" | "maximum" | "step" => scalar_attribute(
@@ -390,6 +391,54 @@ fn string_attribute(
         _ => Err(format!("`{attribute}` requires a string literal")),
     }
 }
+
+fn accessible_role(variable: &syn::Ident, value: &Value) -> Result<TokenStream, String> {
+    let Value::Identifier(value) = value else {
+        return Err(
+            "`accessible-role` requires a Slint enum value such as `text` or `button` (without quotes)"
+                .into(),
+        );
+    };
+
+    // Slint and ARIA use slightly different names for several equivalent roles.
+    // `text` has no corresponding ARIA role; a plain HTML text element already
+    // provides the intended semantics.
+    let role = match value.as_str() {
+        "text" => return Ok(TokenStream::new()),
+        "none" | "button" | "checkbox" | "combobox" | "list" | "slider" | "tab" | "table"
+        | "tree" | "switch" | "banner" | "complementary" | "form" | "main" | "navigation"
+        | "region" | "search" => value.as_str(),
+        "groupbox" | "radio-group" => "group",
+        "image" => "img",
+        "spinbox" => "spinbutton",
+        "tab-list" => "tablist",
+        "tab-panel" => "tabpanel",
+        "progress-indicator" => "progressbar",
+        "text-input" => "textbox",
+        "list-item" => "listitem",
+        "radio-button" => "radio",
+        "window-title-bar" => "toolbar",
+        "content-info" => "contentinfo",
+        other => return Err(format!("unsupported Slint accessible role `{other}`")),
+    };
+    Ok(quote!(dom.attribute(&#variable, "role", #role)?;))
+}
+
+fn accessible_live_region(variable: &syn::Ident, value: &Value) -> Result<TokenStream, String> {
+    let Value::Identifier(value) = value else {
+        return Err(
+            "`accessible-live-region` requires `off`, `polite`, or `assertive` (without quotes)"
+                .into(),
+        );
+    };
+    if !matches!(value.as_str(), "off" | "polite" | "assertive") {
+        return Err(format!(
+            "unsupported accessible live-region value `{value}`; use `off`, `polite`, or `assertive`"
+        ));
+    }
+    Ok(quote!(dom.attribute(&#variable, "aria-live", #value)?;))
+}
+
 fn scalar_attribute(
     variable: &syn::Ident,
     attribute: &str,
@@ -580,6 +629,7 @@ const COMMON_PROPERTIES: &[&str] = &[
     "border-radius",
     "accessible-label",
     "accessible-role",
+    "accessible-live-region",
 ];
 
 fn widget(kind: &str) -> Result<Widget, String> {
@@ -726,6 +776,43 @@ mod tests {
         assert!(validate_css_value("width", "12px").is_ok());
         assert!(validate_css_value("width", "12oops").is_err());
         assert!(validate_css_value("background", "#12xx00").is_err());
+    }
+
+    #[test]
+    fn accepts_slint_accessibility_enum_syntax() {
+        let input = parser::parse(
+            "export component App { Text { text: \"Ready\"; accessible-role: text; accessible-live-region: polite; } Rectangle { accessible-role: image; accessible-label: \"Chart\"; } }",
+        )
+        .unwrap();
+        let output = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap()
+        .to_string();
+        assert!(output.contains("aria-live"));
+        assert!(output.contains("polite"));
+        assert!(output.contains("role"));
+        assert!(output.contains("img"));
+    }
+
+    #[test]
+    fn rejects_quoted_or_unknown_accessibility_enums() {
+        for source in [
+            "export component App { Text { accessible-role: \"text\"; } }",
+            "export component App { Text { accessible-role: status; } }",
+            "export component App { Text { accessible-live-region: loud; } }",
+        ] {
+            let input = parser::parse(source).unwrap();
+            assert!(
+                component(
+                    &input,
+                    &LitStr::new("ui.slint", proc_macro2::Span::call_site())
+                )
+                .is_err(),
+                "{source}"
+            );
+        }
     }
 
     #[test]

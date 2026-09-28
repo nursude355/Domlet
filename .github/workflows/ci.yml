@@ -31,7 +31,7 @@ jobs:
           arch: x64
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-unknown-unknown
+          targets: wasm32-unknown-unknown,thumbv8m.main-none-eabihf
           components: rustfmt, clippy
       - uses: taiki-e/install-action@wasm-pack
       - run: cargo fmt --all -- --check
@@ -76,3 +76,9 @@ jobs:
           if ((Get-Item -LiteralPath example/pkg/slint_dom_example.js -ErrorAction Stop).Length -eq 0) {
             throw 'Empty JavaScript loader'
           }
+      - name: Build Pico 2 + W5500 embedded server
+        run: >-
+          cargo build --manifest-path example-server/Cargo.toml
+          --no-default-features --features embedded
+          --bin slint-dom-pico2-w5500
+          --target thumbv8m.main-none-eabihf --release --locked
