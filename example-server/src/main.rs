@@ -5,10 +5,16 @@
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    response::IntoResponse,
+    http::{header::ORIGIN, HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::get,
     Router,
 };
+
+/// Browser origins allowed to open the RPC socket. Browsers always send
+/// `Origin` on WebSocket handshakes, so this stops other websites open in the
+/// same browser from driving the local server.
+const ALLOWED_ORIGINS: [&str; 2] = ["http://127.0.0.1:8080", "http://localhost:8080"];
 use tower_http::services::ServeDir;
 
 #[tokio::main]
@@ -30,8 +36,12 @@ async fn main() {
     axum::serve(listener, app).await.expect("server failed");
 }
 
-async fn upgrade_rpc(socket: WebSocketUpgrade) -> impl IntoResponse {
-    socket.on_upgrade(handle_rpc)
+async fn upgrade_rpc(headers: HeaderMap, socket: WebSocketUpgrade) -> Response {
+    let origin = headers.get(ORIGIN).map(|value| value.to_str().unwrap_or(""));
+    if origin.is_some_and(|origin| !ALLOWED_ORIGINS.contains(&origin)) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    socket.on_upgrade(handle_rpc).into_response()
 }
 
 async fn handle_rpc(mut socket: WebSocket) {
@@ -43,9 +53,10 @@ async fn handle_rpc(mut socket: WebSocket) {
         tokio::select! {
             message = socket.recv() => match message {
                 Some(Ok(Message::Text(text))) => {
-                    let response = slint_dom_example_server::reply::<1024>(&text);
-                    if socket.send(Message::Text(response.as_str().into())).await.is_err() {
-                        return;
+                    if let Some(response) = slint_dom_example_server::reply::<1024>(&text) {
+                        if socket.send(Message::Text(response.as_str().into())).await.is_err() {
+                            return;
+                        }
                     }
                 }
                 Some(Ok(Message::Close(_))) | None | Some(Err(_)) => return,

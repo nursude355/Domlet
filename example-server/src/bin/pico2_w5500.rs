@@ -7,6 +7,7 @@
 #![no_main]
 #![recursion_limit = "512"]
 
+use core::{convert::Infallible, future::poll_fn, future::Future, pin::pin, task::Poll};
 use defmt::{info, unwrap};
 use defmt_rtt as _;
 use embassy_executor::Spawner;
@@ -69,8 +70,9 @@ impl ws::WebSocketCallback for RpcSocket {
                 .await?
             {
                 Either::First(Ok(ws::Message::Text(request))) => {
-                    let response = slint_dom_example_server::reply::<1024>(request);
-                    tx.send_text(&response).await?;
+                    if let Some(response) = slint_dom_example_server::reply::<1024>(request) {
+                        tx.send_text(&response).await?;
+                    }
                 }
                 Either::First(Ok(ws::Message::Ping(data))) => tx.send_pong(data).await?,
                 Either::First(Ok(ws::Message::Pong(_))) => {}
@@ -91,10 +93,21 @@ impl ws::WebSocketCallback for RpcSocket {
     }
 }
 
-// Close ordinary HTTP connections after each response. One server task is
-// enough to deliver the three assets sequentially before the long-lived
-// WebSocket takes ownership of the connection.
 static CONFIG: picoserve::Config = picoserve::Config::const_default();
+
+/// Serves one connection at a time on port 80 until the device resets.
+async fn serve<P: picoserve::routing::PathRouter>(
+    task_id: u32,
+    app: &picoserve::Router<P>,
+    stack: embassy_net::Stack<'_>,
+) -> picoserve::NoGracefulShutdown {
+    let mut tcp_rx_buffer = [0; 2048];
+    let mut tcp_tx_buffer = [0; 4096];
+    let mut http_buffer = [0; 2048];
+    picoserve::Server::new(app, &CONFIG, &mut http_buffer)
+        .listen_and_serve(task_id, stack, 80, &mut tcp_rx_buffer, &mut tcp_tx_buffer)
+        .await
+}
 
 #[embassy_executor::main(
     executor = "embassy_rp::executor::Executor",
@@ -188,12 +201,19 @@ async fn main(spawner: Spawner) {
         get(async |upgrade: WebSocketUpgrade| upgrade.on_upgrade(RpcSocket)),
     );
 
-    let mut tcp_rx_buffer = [0; 4096];
-    let mut tcp_tx_buffer = [0; 4096];
-    let mut http_buffer = [0; 2048];
-
-    picoserve::Server::new(&app, &CONFIG, &mut http_buffer)
-        .listen_and_serve(0, stack, 80, &mut tcp_rx_buffer, &mut tcp_tx_buffer)
-        .await
-        .into_never()
+    // Each open page holds one connection for its WebSocket, so a single
+    // server would stall reloads and further tabs. Three servers plus the
+    // DHCP socket use every socket in `StackResources<4>`. The router's type
+    // cannot be named, so they are polled together in this task rather than
+    // spawned; none of them ever completes.
+    let mut first = pin!(serve(0, &app, stack));
+    let mut second = pin!(serve(1, &app, stack));
+    let mut third = pin!(serve(2, &app, stack));
+    poll_fn(|context| {
+        let _ = first.as_mut().poll(context);
+        let _ = second.as_mut().poll(context);
+        let _ = third.as_mut().poll(context);
+        Poll::<Infallible>::Pending
+    })
+    .await;
 }

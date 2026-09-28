@@ -6,7 +6,7 @@ export component MainWindow inherits Window {
     callback start();
 
     VerticalLayout {
-        Text { text: status; accessible-role: "status"; }
+        Text { text: status; accessible-role: text; accessible-live-region: polite; }
         Button { text: "Start"; clicked => { root.start(); } }
     }
 }

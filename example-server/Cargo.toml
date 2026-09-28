@@ -2,7 +2,8 @@
 name = "slint-dom-example-server"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.81"
+# The embedded binary uses async closures, stable since 1.85.
+rust-version = "1.85"
 publish = false
 
 # This is an application, deliberately outside the publishable workspace.
