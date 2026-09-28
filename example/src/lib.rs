@@ -53,6 +53,14 @@ pub fn start() -> Result<(), JsValue> {
                 status.set(format!("RPC error: {error}"));
             } else if let Some(result) = message.result {
                 status.set(format!("RPC: {result}"));
+            } else if message.method.as_deref() == Some("telemetry") {
+                let uptime = message
+                    .params
+                    .as_ref()
+                    .and_then(|params| params.get("uptime_s"))
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or_default();
+                status.set(format!("Device uptime: {uptime}s"));
             }
         });
         let rpc = rpc.clone();
