@@ -77,8 +77,8 @@ unmount with externally retained property handles. CI also checks the deployed
 WASM size, separately from the raw compiler artifact. The example enables the
 optional RPC client, so its deployed-package budget is 200 KB.
 
-Release preparation: verify the macro package with `cargo package -p
-slint-dom-macros`, then publish that dependency before packaging and publishing
-`slint-dom`. Packaging the root crate against crates.io cannot succeed until
-the matching macro version is available there. No publication is performed by
-the CI workflow.
+Release preparation: CI verifies both packages with `cargo package -p
+slint-dom-macros` and `cargo package -p slint-dom`; current Cargo resolves the
+unpublished macro crate from the workspace while packaging. Publishing still
+has to follow dependency order: publish `slint-dom-macros` first, then
+`slint-dom`. No publication is performed by the CI workflow.
