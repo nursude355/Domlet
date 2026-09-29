@@ -734,10 +734,6 @@ fn event_name(kind: &str, event: &str) -> Result<&'static str, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::binary_heap::Iter;
-
-    use syn::token;
-
     use super::*;
     use crate::parser;
     #[test]
@@ -912,80 +908,15 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_elements() {
-        use proc_macro2::{Delimiter, TokenTree};
-
-        let input =
-            "export component App { property <string> status: \"Ready\"; Text { text: status; } }";
-        let input = "export component App { property <string> status: \"Ready\"; } }";
-
-        let input_result = parser::parse(input);
-        println! {"------------------ Input: {input_result:?}"};
-        let input = input_result.unwrap();
-        let r = component(
+        let input = parser::parse(
+            "export component App { property <string> status: \"Ready\"; Chart { } }",
+        )
+        .unwrap();
+        let error = component(
             &input,
             &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
-        );
-
-        //        println!("------------------ Result: {r:?}");
-
-        let rr = r.clone();
-        let mut ri = r.iter();
-
-        println!("------------------ Result Iter count: {}", ri.len());
-        if ri.len() != 1 {
-            panic!("not exctly 1 result, but {}", ri.len());
-        }
-        let trees: Vec<TokenTree> = ri.nth(0).unwrap().clone().into_iter().collect();
-        println!("------------------ trees count: {}", trees.len());
-
-        let tokens = r.expect("component generation failed");
-
-        println!(
-            "------------------ tokens count: {}",
-            tokens.clone().into_iter().count()
-        );
-
-        for (i, tt) in tokens.into_iter().enumerate() {
-            match tt {
-                TokenTree::Group(group) => {
-                    println!("{} top-level Group delimiter: {:?}", i, group.delimiter());
-
-                    // inspect the contents
-                    for (j, inner) in group.stream().into_iter().enumerate() {
-                        match inner {
-                            TokenTree::Group(inner_group) => {
-                                println!(
-                                    "{} - {} nested group: {:?}",
-                                    i,
-                                    j,
-                                    inner_group.delimiter()
-                                );
-                            }
-                            other => {
-                                println!("{} - {} leaf token: {:?}", i, j, other);
-                            }
-                        }
-                    }
-                }
-                TokenTree::Ident(ident) => {
-                    println!("{} top-level ident: {:?}", i, ident);
-                }
-                TokenTree::Punct(punct) => {
-                    println!("{} top-level punct: {:?}", i, punct);
-                }
-                TokenTree::Literal(lit) => {
-                    println!("{} top-level literal: {:?}", i, lit);
-                }
-                //                other => {
-                //                    println!("{} top-level token: {:?}", i, other);
-                //                }
-            }
-        }
-
-        match rr {
-            Ok(_) => panic!("expected error"),
-            Err(e) => assert!(e.contains("unsupported Slint element")),
-        }
-        //        assert_eq!(0, 1);
+        )
+        .unwrap_err();
+        assert!(error.contains("unsupported Slint element `Chart`"));
     }
 }

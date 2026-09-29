@@ -17,13 +17,6 @@ impl ParseError {
 }
 
 pub fn parse(source: &str) -> Result<Component, ParseError> {
-    //    if source.contains("FORCE_PARSE_ERROR") {
-    //        return Err(ParseError {
-    //            message: format!("testing parse error in parser.rs -{source}-"),
-    //            offset: 0,
-    //        });
-    //  }
-
     Parser {
         tokens: lex_spanned(source).map_err(|error| ParseError {
             message: error.message,
@@ -401,38 +394,30 @@ mod tests {
         println!("------------------ Result: {:?}", error);
         assert!(error.message.contains("expected `component` declaration"));
         assert!(error.offset == 17);
-
     }
 
     #[test]
     fn rejects_unsupported_elements() {
-        let input = "export component App { Text { text: invalid; } }";
-        let input = "export component App { Text { textx: \"invalid\"; } }";
-        let r = parse(&input);
-
-        println!("------------------ Result: {r:?}");
-
-        match r {
-            Ok(_) => panic!("-------------- expected error"),
-            Err(e) => assert!(e.contains("unsupported Slint element")),
-        }
+        // Element kinds are checked during generation, not while parsing.
+        let input = parse("export component App { Chart { } }").unwrap();
+        let error = crate::generate::component(
+            &input,
+            &syn::LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap_err();
+        assert!(error.message.contains("unsupported Slint element `Chart`"));
     }
 
     #[test]
     fn supports_accessible_role_enum() {
-        let input = "export component App {Text { text: status; accessible-role: \"text\"; } }";
-        let input = "export component App {Text { text: status; accessible-role: text; } }";
-        let r = parse(&input);
-
-        println!("------------------ Result: {r:?}");
-
-        let _x: Result<(), ParseError> = match r {
-//            Ok(_y) => Ok(()),
-            Ok(_) => panic!("-------------- expected error"),
-            Err(e) => {
-                assert!(e.contains("unsupported Slint elementx"));
-                Ok(())
-            }
-        };
+        let input = parse(
+            "export component App { property <string> status; Text { text: status; accessible-role: text; } }",
+        )
+        .unwrap();
+        assert!(crate::generate::component(
+            &input,
+            &syn::LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .is_ok());
     }
 }

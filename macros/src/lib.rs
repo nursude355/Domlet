@@ -72,7 +72,7 @@ fn format_diagnostic(relative: &str, source: &str, offset: usize, message: &str)
         message,
         "",
         "",
-        " ".repeat(column.saturating_sub(1).try_into().unwrap()),
+        " ".repeat(column.saturating_sub(1)),
     )
 }
 
