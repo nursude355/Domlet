@@ -10,25 +10,35 @@ pub struct GenerationError {
     pub offset: usize,
 }
 
-#[cfg(test)]
 impl GenerationError {
+    fn new(offset: usize, message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            offset,
+        }
+    }
+
+    #[cfg(test)]
     fn contains(&self, needle: &str) -> bool {
         self.message.contains(needle)
     }
 }
 
-pub fn component(
-    component: &Component,
-    source_path: &LitStr,
-) -> Result<TokenStream, GenerationError> {
-    let component_name = rust_ident(&component.name).map_err(|message| GenerationError {
-        message,
-        offset: component.offset,
-    })?;
-    validate(component).map_err(|message| GenerationError {
-        message,
-        offset: component.offset,
-    })?;
+impl std::fmt::Display for GenerationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+type GenerationResult<T> = Result<T, GenerationError>;
+
+fn at<T>(offset: usize, result: Result<T, String>) -> GenerationResult<T> {
+    result.map_err(|message| GenerationError::new(offset, message))
+}
+
+pub fn component(component: &Component, source_path: &LitStr) -> GenerationResult<TokenStream> {
+    let component_name = at(component.offset, rust_ident(&component.name))?;
+    validate(component)?;
 
     let mut property_types = HashMap::new();
     let mut fields = Vec::new();
@@ -36,18 +46,11 @@ pub fn component(
     let mut constructors = Vec::new();
     let mut methods = Vec::new();
     for property in &component.properties {
-        let name = rust_ident(&property.name).map_err(|message| GenerationError {
-            message,
-            offset: property.offset,
-        })?;
+        let name = at(property.offset, rust_ident(&property.name))?;
         let setter = format_ident!("set_{}", normalized(&property.name));
         let property_handle = format_ident!("{}_property", normalized(&property.name));
         let ty = rust_type(property.kind);
-        let initial =
-            literal(&property.initial, property.kind).map_err(|message| GenerationError {
-                message,
-                offset: property.offset,
-            })?;
+        let initial = at(property.offset, literal(&property.initial, property.kind))?;
         property_types.insert(property.name.clone(), property.kind);
         fields.push(quote!(#name: ::slint_dom::Property<#ty>));
         initializers.push(quote!(let #name = ::slint_dom::Property::new(#initial);));
@@ -61,12 +64,9 @@ pub fn component(
 
     let mut callback_names = HashSet::new();
     for callback in &component.callbacks {
-        let name = rust_ident(callback).map_err(|message| GenerationError {
-            message,
-            offset: component.offset,
-        })?;
-        let on_name = format_ident!("on_{}", normalized(callback));
-        callback_names.insert(callback.clone());
+        let name = at(callback.offset, rust_ident(&callback.name))?;
+        let on_name = format_ident!("on_{}", normalized(&callback.name));
+        callback_names.insert(callback.name.clone());
         fields.push(quote!(#name: ::slint_dom::Callback));
         initializers.push(quote!(let #name = ::slint_dom::Callback::default();));
         constructors.push(quote!(#name));
@@ -77,11 +77,8 @@ pub fn component(
 
     let mut ids = Vec::new();
     collect_ids(&component.children, &mut ids);
-    for id in &ids {
-        let name = rust_ident(id).map_err(|message| GenerationError {
-            message,
-            offset: component.offset,
-        })?;
+    for (id, offset) in &ids {
+        let name = at(*offset, rust_ident(id))?;
         fields.push(quote!(#name: ::slint_dom::__private::Element));
         constructors.push(quote!(#name));
         methods.push(quote! {
@@ -146,7 +143,7 @@ fn emit_nodes(
     properties: &HashMap<String, PropertyKind>,
     callbacks: &HashSet<String>,
     sequence: &mut usize,
-) -> Result<TokenStream, GenerationError> {
+) -> GenerationResult<TokenStream> {
     let mut output = TokenStream::new();
     for node in nodes {
         let index = *sequence;
@@ -156,20 +153,14 @@ fn emit_nodes(
             .as_ref()
             .map(|id| rust_ident(id))
             .transpose()
-            .map_err(|message| GenerationError {
-                message,
-                offset: node.offset,
-            })?
+            .map_err(|message| GenerationError::new(node.offset, message))?
             .unwrap_or_else(|| format_ident!("__node_{index}"));
-        let spec = widget(&node.kind).map_err(|message| GenerationError {
-            message,
-            offset: node.offset,
-        })?;
+        let spec = at(node.offset, widget(&node.kind))?;
         if matches!(spec.tag, "input" | "img") && !node.children.is_empty() {
-            return Err(GenerationError {
-                offset: node.offset,
-                message: format!("void element `{}` cannot contain children", node.kind),
-            });
+            return Err(GenerationError::new(
+                node.offset,
+                format!("void element `{}` cannot contain children", node.kind),
+            ));
         }
         let mut seen_properties = HashSet::new();
         let mut seen_events = HashSet::new();
@@ -180,7 +171,12 @@ fn emit_nodes(
         // HTML range inputs default to whole-number steps.  Slint's float
         // properties must retain their fractional values unless the UI
         // explicitly chooses a step size.
-        if node.kind == "Slider" && !node.properties.iter().any(|(name, _)| name == "step") {
+        if node.kind == "Slider"
+            && !node
+                .properties
+                .iter()
+                .any(|property| property.name == "step")
+        {
             setup.extend(quote!(dom.attribute(&#variable, "step", "any")?;));
         }
 
@@ -188,29 +184,29 @@ fn emit_nodes(
         // slider's value is applied after `minimum`, `maximum`, and `step`
         // regardless of their order in the source.
         let mut deferred = TokenStream::new();
-        for (name, value) in &node.properties {
+        for property in &node.properties {
+            let name = &property.name;
+            let value = &property.value;
             if !seen_properties.insert(name.as_str()) {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!(
+                return Err(GenerationError::new(
+                    property.offset,
+                    format!(
                         "property `{name}` is assigned more than once on `{}`",
                         node.kind
                     ),
-                });
+                ));
             }
             if !spec.properties.contains(&name.as_str())
                 && !COMMON_PROPERTIES.contains(&name.as_str())
             {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!("property `{name}` is not supported on `{}`", node.kind),
-                });
+                return Err(GenerationError::new(
+                    property.offset,
+                    format!("property `{name}` is not supported on `{}`", node.kind),
+                ));
             }
-            let tokens = emit_property(&variable, &node.kind, name, value, properties).map_err(
-                |message| GenerationError {
-                    message,
-                    offset: node.offset,
-                },
+            let tokens = at(
+                property.offset,
+                emit_property(&variable, &node.kind, name, value, properties),
             )?;
             if node.kind == "Slider" && name == "value" {
                 deferred.extend(tokens);
@@ -221,32 +217,25 @@ fn emit_nodes(
         setup.extend(deferred);
         for handler in &node.handlers {
             if !seen_events.insert(handler.event.as_str()) {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!(
+                return Err(GenerationError::new(
+                    handler.offset,
+                    format!(
                         "event `{}` is handled more than once on `{}`",
                         handler.event, node.kind
                     ),
-                });
+                ));
             }
             if !callbacks.contains(&handler.callback) {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!(
+                return Err(GenerationError::new(
+                    handler.offset,
+                    format!(
                         "event `{}` references undeclared callback `{}`",
                         handler.event, handler.callback
                     ),
-                });
+                ));
             }
-            let event =
-                event_name(&node.kind, &handler.event).map_err(|message| GenerationError {
-                    message,
-                    offset: node.offset,
-                })?;
-            let callback = rust_ident(&handler.callback).map_err(|message| GenerationError {
-                message,
-                offset: node.offset,
-            })?;
+            let event = at(handler.offset, event_name(&node.kind, &handler.event))?;
+            let callback = at(handler.offset, rust_ident(&handler.callback))?;
             setup.extend(quote!(events.push(dom.listen(&#variable, #event, #callback.clone())?);));
         }
         let children = emit_nodes(
@@ -526,8 +515,8 @@ fn require_binding(
     }
 }
 
-fn validate(component: &Component) -> Result<(), String> {
-    rust_ident(&component.name)?;
+fn validate(component: &Component) -> GenerationResult<()> {
+    at(component.offset, rust_ident(&component.name))?;
     let mut fields: HashSet<String> = [
         "root",
         "_events",
@@ -545,48 +534,59 @@ fn validate(component: &Component) -> Result<(), String> {
         .map(str::to_owned)
         .collect();
     for property in &component.properties {
-        rust_ident(&property.name)?;
+        at(property.offset, rust_ident(&property.name))?;
         let name = normalized(&property.name);
         if !fields.insert(name.clone()) {
-            return Err(format!("duplicate component member `{}`", property.name));
+            return Err(GenerationError::new(
+                property.offset,
+                format!("duplicate component member `{}`", property.name),
+            ));
         }
         for method in [&name, &format!("set_{name}"), &format!("{name}_property")] {
             if !methods.insert(method.clone()) {
-                return Err(format!(
-                    "generated method name `{method}` is used more than once"
+                return Err(GenerationError::new(
+                    property.offset,
+                    format!("generated method name `{method}` is used more than once"),
                 ));
             }
         }
     }
     for callback in &component.callbacks {
-        rust_ident(callback)?;
-        let name = normalized(callback);
+        at(callback.offset, rust_ident(&callback.name))?;
+        let name = normalized(&callback.name);
         if !fields.insert(name.clone()) {
-            return Err(format!("duplicate component member `{callback}`"));
+            return Err(GenerationError::new(
+                callback.offset,
+                format!("duplicate component member `{}`", callback.name),
+            ));
         }
         let method = format!("on_{name}");
         if !methods.insert(method.clone()) {
-            return Err(format!(
-                "generated method name `{method}` is used more than once"
+            return Err(GenerationError::new(
+                callback.offset,
+                format!("generated method name `{method}` is used more than once"),
             ));
         }
     }
     let mut ids = Vec::new();
     collect_ids(&component.children, &mut ids);
-    for id in ids {
-        rust_ident(&id)?;
-        let name = normalized(&id);
+    for (id, offset) in ids {
+        at(offset, rust_ident(id))?;
+        let name = normalized(id);
         if !fields.insert(name.clone()) || !methods.insert(name) {
-            return Err(format!("duplicate element id or component member `{id}`"));
+            return Err(GenerationError::new(
+                offset,
+                format!("duplicate element id or component member `{id}`"),
+            ));
         }
     }
     Ok(())
 }
 
-fn collect_ids(elements: &[Element], output: &mut Vec<String>) {
+fn collect_ids<'a>(elements: &'a [Element], output: &mut Vec<(&'a str, usize)>) {
     for element in elements {
         if let Some(id) = &element.id {
-            output.push(id.clone());
+            output.push((id, element.offset));
         }
         collect_ids(&element.children, output);
     }

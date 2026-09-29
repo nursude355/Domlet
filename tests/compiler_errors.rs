@@ -10,8 +10,8 @@ fn invalid_ui_has_actionable_compiler_errors() {
     for (binary, diagnostic) in [
         ("reserved", "duplicate component member `dom`"),
         ("import", "only std-widgets.slint imports are supported"),
-        ("binding", "unknown property binding `missing`"),
-        ("css", "invalid CSS size `12`"),
+        ("binding", "ui/binding.slint:1:31"),
+        ("css", "ui/css.slint:1:36"),
         ("syntax", "ui/syntax.slint:3:30"),
     ] {
         let output = std::process::Command::new(env!("CARGO"))
@@ -24,7 +24,15 @@ fn invalid_ui_has_actionable_compiler_errors() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success(), "{binary} unexpectedly compiled");
         assert!(stderr.contains(diagnostic), "{binary}: {stderr}");
-        if binary == "syntax" {
+        if matches!(binary, "binding" | "css") {
+            let expected_message = if binary == "binding" {
+                "unknown property binding `missing`"
+            } else {
+                "invalid CSS size `12`"
+            };
+            assert!(stderr.contains(expected_message), "{binary}: {stderr}");
+            assert!(stderr.contains('^'), "{binary}: {stderr}");
+        } else if binary == "syntax" {
             assert!(
                 stderr.contains("Text { text: status; XXX}"),
                 "{binary}: {stderr}"

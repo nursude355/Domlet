@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Component, Element, Handler, Property, PropertyKind, Value},
+    ast::{Callback, Component, Element, ElementProperty, Handler, Property, PropertyKind, Value},
     lexer::{lex_spanned, SpannedToken, Token},
 };
 
@@ -125,6 +125,7 @@ impl Parser {
         if self.ident()? != "component" {
             return Err(self.error("expected `component` declaration"));
         }
+        let component_offset = self.offset();
         let name = self.ident()?;
         let mut root_tag = "div";
         if self.is_ident("inherits") {
@@ -188,7 +189,7 @@ impl Parser {
             .map_err(|message| self.error(message))?;
         }
         Ok(Component {
-            offset: 0,
+            offset: component_offset,
             name,
             root_tag,
             title,
@@ -226,7 +227,8 @@ impl Parser {
         })
     }
 
-    fn callback(&mut self) -> Result<String, ParseError> {
+    fn callback(&mut self) -> Result<Callback, ParseError> {
+        let offset = self.offset();
         self.bump();
         let name = self.ident()?;
         self.expect('(')?;
@@ -236,7 +238,7 @@ impl Parser {
             )));
         }
         self.expect(';')?;
-        Ok(name)
+        Ok(Callback { offset, name })
     }
 
     fn element(&mut self, first: String, first_offset: usize) -> Result<Element, ParseError> {
@@ -270,10 +272,14 @@ impl Parser {
             } else if self.eat(':') {
                 let value = self.value()?;
                 self.expect(';')?;
-                properties.push((name, value));
+                properties.push(ElementProperty {
+                    offset: name_offset,
+                    name,
+                    value,
+                });
             } else if self.current() == &Token::Arrow {
                 self.bump();
-                handlers.push(self.handler(name)?);
+                handlers.push(self.handler(name, name_offset)?);
             } else {
                 children.push(self.element(name, name_offset)?);
             }
@@ -288,7 +294,7 @@ impl Parser {
         })
     }
 
-    fn handler(&mut self, event: String) -> Result<Handler, ParseError> {
+    fn handler(&mut self, event: String, offset: usize) -> Result<Handler, ParseError> {
         self.expect('{')?;
         if self.is_ident("root") {
             self.bump();
@@ -299,7 +305,11 @@ impl Parser {
         self.expect(')')?;
         self.eat(';');
         self.expect('}')?;
-        Ok(Handler { event, callback })
+        Ok(Handler {
+            offset,
+            event,
+            callback,
+        })
     }
 
     fn value(&mut self) -> Result<Value, ParseError> {
@@ -367,7 +377,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(component.properties.len(), 1);
-        assert_eq!(component.callbacks, vec!["start"]);
+        assert_eq!(component.callbacks[0].name, "start");
         assert_eq!(component.children[0].id.as_deref(), Some("layout"));
         assert_eq!(
             component.children[0].children[0].handlers[0].callback,
