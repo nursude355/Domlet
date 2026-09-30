@@ -70,8 +70,10 @@ impl DomBuilder {
             }
         });
         let property = property.clone();
-        let mut binding =
-            EventBinding::new(element, "input", move |_| property.set(input.value()))?;
+        let mut binding = EventBinding::new(element, "input", move |_| {
+            // Ignore feedback while this property is already notifying.
+            let _ = property.try_set(input.value());
+        })?;
         binding.subscription = Some(subscription);
         Ok(binding)
     }
@@ -84,8 +86,9 @@ impl DomBuilder {
         let observed_input = input.clone();
         let subscription = property.observe(move |value| observed_input.set_checked(*value));
         let property = property.clone();
-        let mut binding =
-            EventBinding::new(element, "change", move |_| property.set(input.checked()))?;
+        let mut binding = EventBinding::new(element, "change", move |_| {
+            let _ = property.try_set(input.checked());
+        })?;
         binding.subscription = Some(subscription);
         Ok(binding)
     }
@@ -102,7 +105,7 @@ impl DomBuilder {
         let mut binding = EventBinding::new(element, "input", move |_| {
             let value = input.value_as_number();
             if value.is_finite() {
-                property.set(value);
+                let _ = property.try_set(value);
             }
         })?;
         binding.subscription = Some(subscription);
@@ -121,7 +124,7 @@ impl DomBuilder {
         let mut binding = EventBinding::new(element, "input", move |_| {
             let value = input.value_as_number();
             if value.is_finite() && value >= f64::from(i32::MIN) && value <= f64::from(i32::MAX) {
-                property.set(value.round() as i32);
+                let _ = property.try_set(value.round() as i32);
             }
         })?;
         binding.subscription = Some(subscription);

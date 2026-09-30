@@ -80,14 +80,21 @@ jobs:
         run: cargo test --manifest-path example-server/Cargo.toml --locked
       - name: Check desktop example server
         run: cargo check --manifest-path example-server/Cargo.toml --locked
-      - name: Verify crates.io packages
+      - name: Validate crates.io package archives
         run: |
           cargo package -p slint-dom-macros --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo package -p slint-dom --locked
+          # Package both workspace crates in one invocation so Cargo can build
+          # the root archive before the matching macro version is published.
+          # Workspace tests above validate the local pair together.
+          cargo package -p slint-dom-macros -p slint-dom --locked --no-verify
       - name: Check WebAssembly example
         run: cargo check -p slint-dom-example --target wasm32-unknown-unknown --locked
       - name: Run browser tests
+        # ChromeDriver can start slowly on Windows runners; the runner's
+        # default wait fails with "driver failed to bind port during startup".
+        env:
+          WASM_BINDGEN_TEST_DRIVER_TIMEOUT: '60'
         run: wasm-pack test --headless --chrome
       - name: Build the README quick-start consumer
         shell: pwsh

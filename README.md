@@ -48,7 +48,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-slint-dom = "0.1"
+slint-dom = "0.2"
 wasm-bindgen = "0.2"
 ```
 
@@ -189,7 +189,7 @@ are deliberately rejected with compile-time errors.
 
 ## Optional WebSocket/RPC
 
-Enable `slint-dom = { version = "0.1", features = ["rpc"] }` to use the small
+Enable `slint-dom = { version = "0.2", features = ["rpc"] }` to use the small
 browser JSON-RPC 2.0 transport. The complete local server and command-line/
 telemetry example is in [`example-server/`](example-server/README.md). It can
 run either as a Tokio/Axum desktop server or as a `no_std`, no-heap Embassy

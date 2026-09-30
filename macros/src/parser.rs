@@ -179,7 +179,7 @@ impl Parser {
                 property.kind,
                 &format!("property `{}`", property.name),
             )
-            .map_err(|message| self.error(message))?;
+            .map_err(|message| self.error_at(property.offset, message))?;
         }
         Ok(Component {
             offset: component_offset,
@@ -377,6 +377,14 @@ mod tests {
             "start"
         );
     }
+    #[test]
+    fn wrong_initial_type_is_reported_at_the_property() {
+        let source = "export component App {\n    property <int> count: \"x\";\n}";
+        let error = parse(source).unwrap_err();
+        assert!(error.contains("does not match its type"));
+        assert_eq!(error.offset, source.find("property").unwrap());
+    }
+
     #[test]
     fn rejects_unknown_root_properties() {
         println!(

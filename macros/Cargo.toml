@@ -2,10 +2,11 @@
 name = "slint-dom-macros"
 description = "Compile-time component generator for slint-dom"
 repository = "https://github.com/nursude355/Slint_Dom"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.81"
+include = ["src/**", "Cargo.toml", "LICENSE-MIT"]
 
 [lib]
 proc-macro = true
