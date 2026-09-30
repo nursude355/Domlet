@@ -25,15 +25,20 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
         .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
     let component =
         parser::parse(&source).map_err(|error| format_source_error(relative, &source, error))?;
-    let tokens = generate::component(&component, &LitStr::new(relative, Span::call_site()));
-    match tokens {
-        Ok(t) => Ok(t),
-        Err(error) => {
-            let message = format_diagnostic(relative, &source, error.offset, &error.message);
-            let stars = "*".repeat(message.lines().next().map_or(20, |line| line.len()) + 2);
-            Err(format!("slint-dom:\n{}\n{}\n{}", stars, message, stars))
-        }
-    }
+    generate::component(&component, &LitStr::new(relative, Span::call_site())).map_err(|error| {
+        framed(&format_diagnostic(
+            relative,
+            &source,
+            error.offset,
+            &error.message,
+        ))
+    })
+}
+
+/// Frames a diagnostic so it stands out in long build output.
+fn framed(message: &str) -> String {
+    let stars = "*".repeat(message.lines().next().map_or(20, |line| line.len()) + 2);
+    format!("slint-dom:\n{stars}\n{message}\n{stars}")
 }
 
 fn format_source_error(relative: &str, source: &str, error: parser::ParseError) -> String {
@@ -41,9 +46,9 @@ fn format_source_error(relative: &str, source: &str, error: parser::ParseError) 
 }
 
 fn format_diagnostic(relative: &str, source: &str, offset: usize, message: &str) -> String {
-    let mut line = 1;
-    let mut column: u32 = 1;
-    let mut line_start = 0;
+    let mut line: usize = 1;
+    let mut column: usize = 1;
+    let mut line_start: usize = 0;
     for (index, character) in source.chars().enumerate() {
         if index == offset {
             break;
@@ -67,7 +72,7 @@ fn format_diagnostic(relative: &str, source: &str, offset: usize, message: &str)
         message,
         "",
         "",
-        " ".repeat(column.saturating_sub(1).try_into().unwrap()),
+        " ".repeat(column.saturating_sub(1)),
     )
 }
 
@@ -86,5 +91,18 @@ mod tests {
             "{diagnostic}"
         );
         assert!(diagnostic.contains('^'), "{diagnostic}");
+    }
+
+    #[test]
+    fn generator_diagnostics_name_the_exact_property_line() {
+        let source = "export component App {\n    Text {\n        textx: \"invalid\";\n    }\n}";
+        let component = parser::parse(source).unwrap();
+        let error =
+            generate::component(&component, &LitStr::new("ui/main.slint", Span::call_site()))
+                .unwrap_err();
+        let diagnostic = format_diagnostic("ui/main.slint", source, error.offset, &error.message);
+        assert!(diagnostic.contains("ui/main.slint:3:9"), "{diagnostic}");
+        assert!(diagnostic.contains("textx: \"invalid\";"), "{diagnostic}");
+        assert!(diagnostic.contains("not supported"), "{diagnostic}");
     }
 }

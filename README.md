@@ -9,9 +9,11 @@ embedded-device web UIs where a full browser renderer is unnecessary.
 
 ## Quick start
 
-Follow these steps to see a **Ready** label and a **Start** button at
+Follow these steps to see a **Ready** label and a **Start** button at test server
 <http://localhost:8000>. You need Rust and Python 3 installed.
 No separate Slint installation or RPC server is needed for this example.
+For `.slint` syntax highlighting, diagnostics, and previews, install the
+[official Slint extension for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Slint.slint).
 
 On Windows with the MSVC Rust toolchain, also install Visual Studio Build Tools
 with Desktop development with C++ (MSVC x64/x86 tools and a Windows SDK).
@@ -63,7 +65,11 @@ export component MainWindow inherits Window {
     callback start();
 
     VerticalLayout {
-        Text { text: status; accessible-role: "status"; }
+        Text {
+            text: status;
+            accessible-role: text;
+            accessible-live-region: polite;
+        }
         Button { text: "Start"; clicked => { root.start(); } }
     }
 }
@@ -90,9 +96,14 @@ pub fn start() -> Result<(), JsValue> {
 }
 ```
 
+`include_ui!` generates the Rust type `MainWindow` from the `.slint` file.
+The UI becomes visible only when that generated component is mounted, here via
+`MainWindow::mount_to_body()`.
+
 ### 5. Create the web page
 
-Create `index.html` in the project root:
+Create `my-web-ui/index.html`, next to `my-web-ui/Cargo.toml` (the root of the
+new application, not the root of another repository):
 
 ```html
 <!doctype html>
@@ -168,8 +179,9 @@ A runnable copy is in [`test-slint-dom-user/`](test-slint-dom-user/README.md).
 `TouchArea`, `VerticalLayout`, and `HorizontalLayout` are supported. String,
 boolean, integer, and float properties work; text, checkbox, and slider values
 can be two-way bound. Use zero-argument callbacks, element IDs, basic sizing
-and colors, `accessible-label`, `accessible-role`, and `!property` with
-`enabled` or `visible`.
+and colors, `accessible-label`, `accessible-role`, `accessible-live-region`,
+and `!property` with `enabled` or `visible`. Slint enum values are unquoted:
+write `accessible-role: image;`, not `accessible-role: "image";`.
 
 This is not a replacement for every Slint feature: callback parameters, general
 expressions, repeaters, conditionals, custom components, and arbitrary imports
@@ -179,7 +191,9 @@ are deliberately rejected with compile-time errors.
 
 Enable `slint-dom = { version = "0.1", features = ["rpc"] }` to use the small
 browser JSON-RPC 2.0 transport. The complete local server and command-line/
-telemetry example is in [`example-server/`](example-server/README.md).
+telemetry example is in [`example-server/`](example-server/README.md). It can
+run either as a Tokio/Axum desktop server or as a `no_std`, no-heap Embassy
+server on a Raspberry Pi Pico 2 with W5500 Ethernet.
 
 ## Before publishing an application
 

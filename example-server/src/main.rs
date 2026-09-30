@@ -5,11 +5,16 @@
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    response::IntoResponse,
+    http::{header::ORIGIN, HeaderMap, StatusCode},
+    response::{IntoResponse, Response},
     routing::get,
     Router,
 };
-use serde_json::{json, Value};
+
+/// Browser origins allowed to open the RPC socket. Browsers always send
+/// `Origin` on WebSocket handshakes, so this stops other websites open in the
+/// same browser from driving the local server.
+const ALLOWED_ORIGINS: [&str; 2] = ["http://127.0.0.1:8080", "http://localhost:8080"];
 use tower_http::services::ServeDir;
 
 #[tokio::main]
@@ -31,56 +36,39 @@ async fn main() {
     axum::serve(listener, app).await.expect("server failed");
 }
 
-async fn upgrade_rpc(socket: WebSocketUpgrade) -> impl IntoResponse {
-    socket.on_upgrade(handle_rpc)
+async fn upgrade_rpc(headers: HeaderMap, socket: WebSocketUpgrade) -> Response {
+    let origin = headers.get(ORIGIN).map(|value| value.to_str().unwrap_or(""));
+    if origin.is_some_and(|origin| !ALLOWED_ORIGINS.contains(&origin)) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    socket.on_upgrade(handle_rpc).into_response()
 }
 
 async fn handle_rpc(mut socket: WebSocket) {
-    while let Some(Ok(Message::Text(text))) = socket.recv().await {
-        let response = match serde_json::from_str::<Value>(&text) {
-            Ok(request) => reply(request),
-            Err(error) => json!({
-                "jsonrpc": "2.0",
-                "id": null,
-                "error": { "code": -32700, "message": error.to_string() }
-            }),
-        };
-        if socket
-            .send(Message::Text(response.to_string().into()))
-            .await
-            .is_err()
-        {
-            return;
+    let mut telemetry = tokio::time::interval(std::time::Duration::from_secs(5));
+    telemetry.tick().await;
+    let mut uptime_seconds = 0;
+
+    loop {
+        tokio::select! {
+            message = socket.recv() => match message {
+                Some(Ok(Message::Text(text))) => {
+                    if let Some(response) = slint_dom_example_server::reply::<1024>(&text) {
+                        if socket.send(Message::Text(response.as_str().into())).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+                Some(Ok(Message::Close(_))) | None | Some(Err(_)) => return,
+                Some(Ok(_)) => {}
+            },
+            _ = telemetry.tick() => {
+                uptime_seconds += 5;
+                let message = slint_dom_example_server::telemetry::<128>(uptime_seconds);
+                if socket.send(Message::Text(message.as_str().into())).await.is_err() {
+                    return;
+                }
+            }
         }
-    }
-}
-
-fn reply(request: Value) -> Value {
-    let id = request.get("id").cloned().unwrap_or(Value::Null);
-    match request.get("method").and_then(Value::as_str) {
-        Some("command") => json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "result": { "status": "command accepted", "echo": request.get("params") }
-        }),
-        Some("ping") => json!({ "jsonrpc": "2.0", "id": id, "result": "pong" }),
-        _ => json!({
-            "jsonrpc": "2.0",
-            "id": id,
-            "error": { "code": -32601, "message": "method not found" }
-        }),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn command_is_a_valid_rpc_method() {
-        let answer =
-            reply(json!({ "jsonrpc": "2.0", "id": 4, "method": "command", "params": "status" }));
-        assert_eq!(answer["id"], 4);
-        assert_eq!(answer["result"]["status"], "command accepted");
     }
 }

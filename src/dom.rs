@@ -191,13 +191,15 @@ impl DomBuilder {
                             key.key() == "Enter" && !key.is_composing() && !key.repeat()
                         })
                 {
-                    callback.invoke();
+                    // A handler which synchronously re-dispatches this event
+                    // (e.g. `element.click()`) must not abort the module.
+                    let _ = callback.try_invoke();
                 }
             });
         }
         EventBinding::new(element, event, move |_| {
             if !target.has_attribute("disabled") {
-                callback.invoke();
+                let _ = callback.try_invoke();
             }
         })
     }
@@ -261,5 +263,5 @@ const DEFAULT_CSS: &str = r#"
 .sd-button:disabled { cursor: default; opacity: .55; }
 .sd-input, .sd-slider, .sd-rectangle { box-sizing: border-box; }
 .sd-image { max-width: 100%; }
-[hidden] { display: none !important; }
+.sd-component[hidden], .sd-component [hidden] { display: none !important; }
 "#;

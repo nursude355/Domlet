@@ -58,8 +58,14 @@ impl RpcClient {
             let Ok(message) = serde_json::from_str::<Message>(&text) else {
                 return;
             };
-            if let Some(handler) = message_handler.borrow_mut().as_mut() {
-                handler(message);
+            // Release the slot while the handler runs so it can replace itself.
+            let Some(mut handler) = message_handler.borrow_mut().take() else {
+                return;
+            };
+            handler(message);
+            let mut slot = message_handler.borrow_mut();
+            if slot.is_none() {
+                *slot = Some(handler);
             }
         }) as Box<dyn FnMut(MessageEvent)>);
         socket.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
@@ -70,9 +76,18 @@ impl RpcClient {
         })
     }
 
-    /// Sets the sole incoming-message handler. Replacing it is safe.
+    /// Sets the sole incoming-message handler. Replacing it is safe, including
+    /// from inside the running handler.
     pub fn on_message(&self, handler: impl FnMut(Message) + 'static) {
         *self.handler.borrow_mut() = Some(Box::new(handler));
+    }
+
+    /// Whether the socket is currently connected and can send messages.
+    ///
+    /// Creating a client never fails for an unreachable server; the browser
+    /// connects asynchronously, so check this before reporting a send.
+    pub fn is_open(&self) -> bool {
+        self.socket.ready_state() == WebSocket::OPEN
     }
 
     /// Sends a JSON-RPC notification (without an id).

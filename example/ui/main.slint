@@ -12,11 +12,7 @@ export component MainWindow inherits Window {
     callback execute();
 
     VerticalLayout {
-//        Text { text: status; accessible-role: "text"; }   // original accepted by current slint-dom
-//        Text { text: status; accessible-role: text; }     // accepted by VSCCode Slint 
-        Text { text: status; }                              // accepted by both
-//        Text { text: status; XXX: "YYY"; }                     // testing
-
+        Text { text: status; }
         HorizontalLayout {
             start-button := Button {
                 text: "Start";
@@ -34,9 +30,7 @@ export component MainWindow inherits Window {
         }
         CheckBox { checked: active; accessible-label: "Active mode"; }
         Slider { minimum: 0; maximum: 100; value: progress; accessible-label: "Progress"; }
-//        graph := Rectangle { height: 160px; accessible-label: "Live chart"; background: #eef4ff; }                            //original accepted by current slint-dom
-//        graph := Rectangle { height: 160px; accessible_role: text; accessible-label: "Live chart"; background: #eef4ff; }     // accepted by VSCCode Slint
-        graph := Rectangle { height: 160px; background: #eef4ff; }                                                            // accepted by both
+        graph := Rectangle { height: 160px; accessible-role: image; accessible-label: "Live chart"; background: #eef4ff; }
         Text { text: "Inactive"; visible: !active; }
     }
 }

@@ -28,7 +28,8 @@ pub fn start() -> Result<(), JsValue> {
             baseline * 0.82,
             baseline,
         ];
-        let _ = chart_target.set_points(&values);
+        // A fixed scale matching the slider keeps the line height meaningful.
+        let _ = chart_target.set_points_in_range(&values, 0.0, 100.0);
     });
 
     let status = app.status_property();
@@ -53,13 +54,29 @@ pub fn start() -> Result<(), JsValue> {
                 status.set(format!("RPC error: {error}"));
             } else if let Some(result) = message.result {
                 status.set(format!("RPC: {result}"));
+            } else if message.method.as_deref() == Some("telemetry") {
+                let uptime = message
+                    .params
+                    .as_ref()
+                    .and_then(|params| params.get("uptime_s"))
+                    .and_then(|value| value.as_u64())
+                    .unwrap_or_default();
+                status.set(format!("Device uptime: {uptime}s"));
             }
         });
         let rpc = rpc.clone();
         let command = app.command_property();
+        let status = app.status_property();
+        let mut next_id = 0_u64;
         app.on_execute(move || {
-            let value = command.get();
-            let _ = rpc.request(1, "command", &value);
+            if !rpc.is_open() {
+                status.set("RPC server is not connected".into());
+                return;
+            }
+            next_id += 1;
+            if let Err(error) = rpc.request(next_id, "command", &command.get()) {
+                status.set(format!("RPC send failed: {error:?}"));
+            }
         });
     } else {
         let status = app.status_property();

@@ -2,15 +2,62 @@
 name = "slint-dom-example-server"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.81"
+# The embedded binary uses async closures, stable since 1.85.
+rust-version = "1.85"
 publish = false
 
 # This is an application, deliberately outside the publishable workspace.
 [workspace]
 
+[features]
+default = ["desktop"]
+desktop = ["dep:axum", "dep:tokio", "dep:tower-http", "dep:webbrowser"]
+embedded = [
+    "dep:cortex-m-rt",
+    "dep:defmt",
+    "dep:defmt-rtt",
+    "dep:embassy-executor",
+    "dep:embassy-net",
+    "dep:embassy-net-wiznet",
+    "dep:embassy-rp",
+    "dep:embassy-time",
+    "dep:embedded-hal-bus",
+    "dep:panic-probe",
+    "dep:picoserve",
+    "dep:static_cell",
+]
+
+[[bin]]
+name = "slint-dom-example-server"
+path = "src/main.rs"
+required-features = ["desktop"]
+
+[[bin]]
+name = "slint-dom-pico2-w5500"
+path = "src/bin/pico2_w5500.rs"
+required-features = ["embedded"]
+test = false
+bench = false
+
 [dependencies]
-axum = { version = "0.8.9", features = ["ws"] }
-serde_json = "1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
-tower-http = { version = "0.7.1", features = ["fs"] }
-webbrowser = "1"
+heapless = "0.8"
+serde = { version = "1", default-features = false, features = ["derive"] }
+serde-json-core = "0.6"
+
+axum = { version = "0.8.9", features = ["ws"], optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"], optional = true }
+tower-http = { version = "0.7.1", features = ["fs"], optional = true }
+webbrowser = { version = "1", optional = true }
+
+cortex-m-rt = { version = "0.7", optional = true }
+defmt = { version = "1", optional = true }
+defmt-rtt = { version = "1", optional = true }
+embassy-executor = { version = "0.10", optional = true }
+embassy-net = { version = "0.9.1", features = ["dhcpv4", "medium-ethernet", "tcp"], optional = true }
+embassy-net-wiznet = { version = "0.3", features = ["defmt"], optional = true }
+embassy-rp = { version = "0.10", features = ["rp235xa", "binary-info", "critical-section-impl", "executor-thread", "time-driver"], optional = true }
+embassy-time = { version = "0.5", optional = true }
+embedded-hal-bus = { version = "0.3", features = ["async"], optional = true }
+panic-probe = { version = "1", features = ["print-defmt"], optional = true }
+picoserve = { version = "0.19", features = ["embassy", "ws"], optional = true }
+static_cell = { version = "2", optional = true }

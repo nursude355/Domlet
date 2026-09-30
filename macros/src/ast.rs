@@ -5,7 +5,7 @@ pub struct Component {
     pub root_tag: &'static str,
     pub title: Option<String>,
     pub properties: Vec<Property>,
-    pub callbacks: Vec<String>,
+    pub callbacks: Vec<Callback>,
     pub children: Vec<Element>,
 }
 
@@ -30,15 +30,29 @@ pub struct Element {
     pub offset: usize,
     pub kind: String,
     pub id: Option<String>,
-    pub properties: Vec<(String, Value)>,
+    pub properties: Vec<ElementProperty>,
     pub handlers: Vec<Handler>,
     pub children: Vec<Element>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Handler {
+    pub offset: usize,
     pub event: String,
     pub callback: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Callback {
+    pub offset: usize,
+    pub name: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ElementProperty {
+    pub offset: usize,
+    pub name: String,
+    pub value: Value,
 }
 
 #[derive(Clone, Debug, PartialEq)]

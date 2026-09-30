@@ -10,25 +10,35 @@ pub struct GenerationError {
     pub offset: usize,
 }
 
-#[cfg(test)]
 impl GenerationError {
+    fn new(offset: usize, message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            offset,
+        }
+    }
+
+    #[cfg(test)]
     fn contains(&self, needle: &str) -> bool {
         self.message.contains(needle)
     }
 }
 
-pub fn component(
-    component: &Component,
-    source_path: &LitStr,
-) -> Result<TokenStream, GenerationError> {
-    let component_name = rust_ident(&component.name).map_err(|message| GenerationError {
-        message,
-        offset: component.offset,
-    })?;
-    validate(component).map_err(|message| GenerationError {
-        message,
-        offset: component.offset,
-    })?;
+impl std::fmt::Display for GenerationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+type GenerationResult<T> = Result<T, GenerationError>;
+
+fn at<T>(offset: usize, result: Result<T, String>) -> GenerationResult<T> {
+    result.map_err(|message| GenerationError::new(offset, message))
+}
+
+pub fn component(component: &Component, source_path: &LitStr) -> GenerationResult<TokenStream> {
+    let component_name = at(component.offset, rust_ident(&component.name))?;
+    validate(component)?;
 
     let mut property_types = HashMap::new();
     let mut fields = Vec::new();
@@ -36,18 +46,11 @@ pub fn component(
     let mut constructors = Vec::new();
     let mut methods = Vec::new();
     for property in &component.properties {
-        let name = rust_ident(&property.name).map_err(|message| GenerationError {
-            message,
-            offset: property.offset,
-        })?;
+        let name = at(property.offset, rust_ident(&property.name))?;
         let setter = format_ident!("set_{}", normalized(&property.name));
         let property_handle = format_ident!("{}_property", normalized(&property.name));
         let ty = rust_type(property.kind);
-        let initial =
-            literal(&property.initial, property.kind).map_err(|message| GenerationError {
-                message,
-                offset: property.offset,
-            })?;
+        let initial = at(property.offset, literal(&property.initial, property.kind))?;
         property_types.insert(property.name.clone(), property.kind);
         fields.push(quote!(#name: ::slint_dom::Property<#ty>));
         initializers.push(quote!(let #name = ::slint_dom::Property::new(#initial);));
@@ -61,12 +64,9 @@ pub fn component(
 
     let mut callback_names = HashSet::new();
     for callback in &component.callbacks {
-        let name = rust_ident(callback).map_err(|message| GenerationError {
-            message,
-            offset: component.offset,
-        })?;
-        let on_name = format_ident!("on_{}", normalized(callback));
-        callback_names.insert(callback.clone());
+        let name = at(callback.offset, rust_ident(&callback.name))?;
+        let on_name = format_ident!("on_{}", normalized(&callback.name));
+        callback_names.insert(callback.name.clone());
         fields.push(quote!(#name: ::slint_dom::Callback));
         initializers.push(quote!(let #name = ::slint_dom::Callback::default();));
         constructors.push(quote!(#name));
@@ -77,11 +77,8 @@ pub fn component(
 
     let mut ids = Vec::new();
     collect_ids(&component.children, &mut ids);
-    for id in &ids {
-        let name = rust_ident(id).map_err(|message| GenerationError {
-            message,
-            offset: component.offset,
-        })?;
+    for (id, offset) in &ids {
+        let name = at(*offset, rust_ident(id))?;
         fields.push(quote!(#name: ::slint_dom::__private::Element));
         constructors.push(quote!(#name));
         methods.push(quote! {
@@ -146,7 +143,7 @@ fn emit_nodes(
     properties: &HashMap<String, PropertyKind>,
     callbacks: &HashSet<String>,
     sequence: &mut usize,
-) -> Result<TokenStream, GenerationError> {
+) -> GenerationResult<TokenStream> {
     let mut output = TokenStream::new();
     for node in nodes {
         let index = *sequence;
@@ -156,20 +153,14 @@ fn emit_nodes(
             .as_ref()
             .map(|id| rust_ident(id))
             .transpose()
-            .map_err(|message| GenerationError {
-                message,
-                offset: node.offset,
-            })?
+            .map_err(|message| GenerationError::new(node.offset, message))?
             .unwrap_or_else(|| format_ident!("__node_{index}"));
-        let spec = widget(&node.kind).map_err(|message| GenerationError {
-            message,
-            offset: node.offset,
-        })?;
+        let spec = at(node.offset, widget(&node.kind))?;
         if matches!(spec.tag, "input" | "img") && !node.children.is_empty() {
-            return Err(GenerationError {
-                offset: node.offset,
-                message: format!("void element `{}` cannot contain children", node.kind),
-            });
+            return Err(GenerationError::new(
+                node.offset,
+                format!("void element `{}` cannot contain children", node.kind),
+            ));
         }
         let mut seen_properties = HashSet::new();
         let mut seen_events = HashSet::new();
@@ -180,65 +171,71 @@ fn emit_nodes(
         // HTML range inputs default to whole-number steps.  Slint's float
         // properties must retain their fractional values unless the UI
         // explicitly chooses a step size.
-        if node.kind == "Slider" && !node.properties.iter().any(|(name, _)| name == "step") {
+        if node.kind == "Slider"
+            && !node
+                .properties
+                .iter()
+                .any(|property| property.name == "step")
+        {
             setup.extend(quote!(dom.attribute(&#variable, "step", "any")?;));
         }
 
-        for (name, value) in &node.properties {
+        // Browsers clamp a range input's value to its current bounds, so a
+        // slider's value is applied after `minimum`, `maximum`, and `step`
+        // regardless of their order in the source.
+        let mut deferred = TokenStream::new();
+        for property in &node.properties {
+            let name = &property.name;
+            let value = &property.value;
             if !seen_properties.insert(name.as_str()) {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!(
+                return Err(GenerationError::new(
+                    property.offset,
+                    format!(
                         "property `{name}` is assigned more than once on `{}`",
                         node.kind
                     ),
-                });
+                ));
             }
             if !spec.properties.contains(&name.as_str())
                 && !COMMON_PROPERTIES.contains(&name.as_str())
             {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!("property `{name}` is not supported on `{}`", node.kind),
-                });
+                return Err(GenerationError::new(
+                    property.offset,
+                    format!("property `{name}` is not supported on `{}`", node.kind),
+                ));
             }
-            setup.extend(
-                emit_property(&variable, &node.kind, name, value, properties).map_err(
-                    |message| GenerationError {
-                        message,
-                        offset: node.offset,
-                    },
-                )?,
-            );
+            let tokens = at(
+                property.offset,
+                emit_property(&variable, &node.kind, name, value, properties),
+            )?;
+            if node.kind == "Slider" && name == "value" {
+                deferred.extend(tokens);
+            } else {
+                setup.extend(tokens);
+            }
         }
+        setup.extend(deferred);
         for handler in &node.handlers {
             if !seen_events.insert(handler.event.as_str()) {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!(
+                return Err(GenerationError::new(
+                    handler.offset,
+                    format!(
                         "event `{}` is handled more than once on `{}`",
                         handler.event, node.kind
                     ),
-                });
+                ));
             }
             if !callbacks.contains(&handler.callback) {
-                return Err(GenerationError {
-                    offset: node.offset,
-                    message: format!(
+                return Err(GenerationError::new(
+                    handler.offset,
+                    format!(
                         "event `{}` references undeclared callback `{}`",
                         handler.event, handler.callback
                     ),
-                });
+                ));
             }
-            let event =
-                event_name(&node.kind, &handler.event).map_err(|message| GenerationError {
-                    message,
-                    offset: node.offset,
-                })?;
-            let callback = rust_ident(&handler.callback).map_err(|message| GenerationError {
-                message,
-                offset: node.offset,
-            })?;
+            let event = at(handler.offset, event_name(&node.kind, &handler.event))?;
+            let callback = at(handler.offset, rust_ident(&handler.callback))?;
             setup.extend(quote!(events.push(dom.listen(&#variable, #event, #callback.clone())?);));
         }
         let children = emit_nodes(
@@ -286,6 +283,15 @@ fn emit_property(
                 "`text` on `{kind}` requires a string or string property"
             )),
         },
+        "enabled"
+            if !matches!(
+                kind,
+                "Button" | "TouchArea" | "LineEdit" | "TextInput" | "CheckBox" | "Slider"
+            ) =>
+        {
+            // `disabled` has no effect on the spans and divs used elsewhere.
+            Err(format!("`enabled` is not supported on `{kind}`"))
+        }
         "enabled" | "visible" => {
             let attribute = if name == "enabled" {
                 "disabled"
@@ -333,7 +339,8 @@ fn emit_property(
         },
         "placeholder-text" => string_attribute(variable, "placeholder", value),
         "accessible-label" => string_attribute(variable, "aria-label", value),
-        "accessible-role" => string_attribute(variable, "role", value),
+        "accessible-role" => accessible_role(variable, value),
+        "accessible-live-region" => accessible_live_region(variable, value),
         "source" => string_attribute(variable, "src", value),
         "value" if kind == "Slider" => slider_value(variable, value, properties),
         "value" | "minimum" | "maximum" | "step" => scalar_attribute(
@@ -390,6 +397,54 @@ fn string_attribute(
         _ => Err(format!("`{attribute}` requires a string literal")),
     }
 }
+
+fn accessible_role(variable: &syn::Ident, value: &Value) -> Result<TokenStream, String> {
+    let Value::Identifier(value) = value else {
+        return Err(
+            "`accessible-role` requires a Slint enum value such as `text` or `button` (without quotes)"
+                .into(),
+        );
+    };
+
+    // Slint and ARIA use slightly different names for several equivalent roles.
+    // `text` has no corresponding ARIA role; a plain HTML text element already
+    // provides the intended semantics.
+    let role = match value.as_str() {
+        "text" => return Ok(TokenStream::new()),
+        "none" | "button" | "checkbox" | "combobox" | "list" | "slider" | "tab" | "table"
+        | "tree" | "switch" | "banner" | "complementary" | "form" | "main" | "navigation"
+        | "region" | "search" => value.as_str(),
+        "groupbox" | "radio-group" => "group",
+        "image" => "img",
+        "spinbox" => "spinbutton",
+        "tab-list" => "tablist",
+        "tab-panel" => "tabpanel",
+        "progress-indicator" => "progressbar",
+        "text-input" => "textbox",
+        "list-item" => "listitem",
+        "radio-button" => "radio",
+        "window-title-bar" => "toolbar",
+        "content-info" => "contentinfo",
+        other => return Err(format!("unsupported Slint accessible role `{other}`")),
+    };
+    Ok(quote!(dom.attribute(&#variable, "role", #role)?;))
+}
+
+fn accessible_live_region(variable: &syn::Ident, value: &Value) -> Result<TokenStream, String> {
+    let Value::Identifier(value) = value else {
+        return Err(
+            "`accessible-live-region` requires `off`, `polite`, or `assertive` (without quotes)"
+                .into(),
+        );
+    };
+    if !matches!(value.as_str(), "off" | "polite" | "assertive") {
+        return Err(format!(
+            "unsupported accessible live-region value `{value}`; use `off`, `polite`, or `assertive`"
+        ));
+    }
+    Ok(quote!(dom.attribute(&#variable, "aria-live", #value)?;))
+}
+
 fn scalar_attribute(
     variable: &syn::Ident,
     attribute: &str,
@@ -460,8 +515,8 @@ fn require_binding(
     }
 }
 
-fn validate(component: &Component) -> Result<(), String> {
-    rust_ident(&component.name)?;
+fn validate(component: &Component) -> GenerationResult<()> {
+    at(component.offset, rust_ident(&component.name))?;
     let mut fields: HashSet<String> = [
         "root",
         "_events",
@@ -479,48 +534,59 @@ fn validate(component: &Component) -> Result<(), String> {
         .map(str::to_owned)
         .collect();
     for property in &component.properties {
-        rust_ident(&property.name)?;
+        at(property.offset, rust_ident(&property.name))?;
         let name = normalized(&property.name);
         if !fields.insert(name.clone()) {
-            return Err(format!("duplicate component member `{}`", property.name));
+            return Err(GenerationError::new(
+                property.offset,
+                format!("duplicate component member `{}`", property.name),
+            ));
         }
         for method in [&name, &format!("set_{name}"), &format!("{name}_property")] {
             if !methods.insert(method.clone()) {
-                return Err(format!(
-                    "generated method name `{method}` is used more than once"
+                return Err(GenerationError::new(
+                    property.offset,
+                    format!("generated method name `{method}` is used more than once"),
                 ));
             }
         }
     }
     for callback in &component.callbacks {
-        rust_ident(callback)?;
-        let name = normalized(callback);
+        at(callback.offset, rust_ident(&callback.name))?;
+        let name = normalized(&callback.name);
         if !fields.insert(name.clone()) {
-            return Err(format!("duplicate component member `{callback}`"));
+            return Err(GenerationError::new(
+                callback.offset,
+                format!("duplicate component member `{}`", callback.name),
+            ));
         }
         let method = format!("on_{name}");
         if !methods.insert(method.clone()) {
-            return Err(format!(
-                "generated method name `{method}` is used more than once"
+            return Err(GenerationError::new(
+                callback.offset,
+                format!("generated method name `{method}` is used more than once"),
             ));
         }
     }
     let mut ids = Vec::new();
     collect_ids(&component.children, &mut ids);
-    for id in ids {
-        rust_ident(&id)?;
-        let name = normalized(&id);
+    for (id, offset) in ids {
+        at(offset, rust_ident(id))?;
+        let name = normalized(id);
         if !fields.insert(name.clone()) || !methods.insert(name) {
-            return Err(format!("duplicate element id or component member `{id}`"));
+            return Err(GenerationError::new(
+                offset,
+                format!("duplicate element id or component member `{id}`"),
+            ));
         }
     }
     Ok(())
 }
 
-fn collect_ids(elements: &[Element], output: &mut Vec<String>) {
+fn collect_ids<'a>(elements: &'a [Element], output: &mut Vec<(&'a str, usize)>) {
     for element in elements {
         if let Some(id) = &element.id {
-            output.push(id.clone());
+            output.push((id, element.offset));
         }
         collect_ids(&element.children, output);
     }
@@ -580,6 +646,7 @@ const COMMON_PROPERTIES: &[&str] = &[
     "border-radius",
     "accessible-label",
     "accessible-role",
+    "accessible-live-region",
 ];
 
 fn widget(kind: &str) -> Result<Widget, String> {
@@ -667,10 +734,6 @@ fn event_name(kind: &str, event: &str) -> Result<&'static str, String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::binary_heap::Iter;
-
-    use syn::token;
-
     use super::*;
     use crate::parser;
     #[test]
@@ -729,6 +792,75 @@ mod tests {
     }
 
     #[test]
+    fn accepts_slint_accessibility_enum_syntax() {
+        let input = parser::parse(
+            "export component App { Text { text: \"Ready\"; accessible-role: text; accessible-live-region: polite; } Rectangle { accessible-role: image; accessible-label: \"Chart\"; } }",
+        )
+        .unwrap();
+        let output = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap()
+        .to_string();
+        assert!(output.contains("aria-live"));
+        assert!(output.contains("polite"));
+        assert!(output.contains("role"));
+        assert!(output.contains("img"));
+    }
+
+    #[test]
+    fn rejects_quoted_or_unknown_accessibility_enums() {
+        for source in [
+            "export component App { Text { accessible-role: \"text\"; } }",
+            "export component App { Text { accessible-role: status; } }",
+            "export component App { Text { accessible-live-region: loud; } }",
+        ] {
+            let input = parser::parse(source).unwrap();
+            assert!(
+                component(
+                    &input,
+                    &LitStr::new("ui.slint", proc_macro2::Span::call_site())
+                )
+                .is_err(),
+                "{source}"
+            );
+        }
+    }
+
+    #[test]
+    fn slider_value_is_bound_after_its_bounds() {
+        let input = parser::parse(
+            "export component App { property <float> level: 150; Slider { value: level; maximum: 200; } }",
+        )
+        .unwrap();
+        let output = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap()
+        .to_string();
+        let maximum = output.find("\"max\"").unwrap();
+        let value = output.find("bind_slider_f64").unwrap();
+        assert!(maximum < value, "{output}");
+    }
+
+    #[test]
+    fn rejects_enabled_on_non_controls() {
+        let input = parser::parse("export component App { Text { text: \"x\"; enabled: false; } }")
+            .unwrap();
+        let error = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("`enabled` is not supported on `Text`"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn rejects_children_of_void_elements() {
         let input =
             parser::parse("export component App { LineEdit { Text { text: \"invalid\"; } } }")
@@ -776,80 +908,15 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_elements() {
-        use proc_macro2::{Delimiter, TokenTree};
-
-        let input =
-            "export component App { property <string> status: \"Ready\"; Text { text: status; } }";
-        let input = "export component App { property <string> status: \"Ready\"; } }";
-
-        let input_result = parser::parse(input);
-        println! {"------------------ Input: {input_result:?}"};
-        let input = input_result.unwrap();
-        let r = component(
+        let input = parser::parse(
+            "export component App { property <string> status: \"Ready\"; Chart { } }",
+        )
+        .unwrap();
+        let error = component(
             &input,
             &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
-        );
-
-        //        println!("------------------ Result: {r:?}");
-
-        let rr = r.clone();
-        let mut ri = r.iter();
-
-        println!("------------------ Result Iter count: {}", ri.len());
-        if ri.len() != 1 {
-            panic!("not exctly 1 result, but {}", ri.len());
-        }
-        let trees: Vec<TokenTree> = ri.nth(0).unwrap().clone().into_iter().collect();
-        println!("------------------ trees count: {}", trees.len());
-
-        let tokens = r.expect("component generation failed");
-
-        println!(
-            "------------------ tokens count: {}",
-            tokens.clone().into_iter().count()
-        );
-
-        for (i, tt) in tokens.into_iter().enumerate() {
-            match tt {
-                TokenTree::Group(group) => {
-                    println!("{} top-level Group delimiter: {:?}", i, group.delimiter());
-
-                    // inspect the contents
-                    for (j, inner) in group.stream().into_iter().enumerate() {
-                        match inner {
-                            TokenTree::Group(inner_group) => {
-                                println!(
-                                    "{} - {} nested group: {:?}",
-                                    i,
-                                    j,
-                                    inner_group.delimiter()
-                                );
-                            }
-                            other => {
-                                println!("{} - {} leaf token: {:?}", i, j, other);
-                            }
-                        }
-                    }
-                }
-                TokenTree::Ident(ident) => {
-                    println!("{} top-level ident: {:?}", i, ident);
-                }
-                TokenTree::Punct(punct) => {
-                    println!("{} top-level punct: {:?}", i, punct);
-                }
-                TokenTree::Literal(lit) => {
-                    println!("{} top-level literal: {:?}", i, lit);
-                }
-                //                other => {
-                //                    println!("{} top-level token: {:?}", i, other);
-                //                }
-            }
-        }
-
-        match rr {
-            Ok(_) => panic!("expected error"),
-            Err(e) => assert!(e.contains("unsupported Slint element")),
-        }
-        //        assert_eq!(0, 1);
+        )
+        .unwrap_err();
+        assert!(error.contains("unsupported Slint element `Chart`"));
     }
 }
