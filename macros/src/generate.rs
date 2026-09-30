@@ -619,10 +619,14 @@ fn literal(value: &Value, kind: PropertyKind) -> Result<TokenStream, String> {
             .parse::<i32>()
             .map(|v| quote!(#v))
             .map_err(|_| format!("`{v}` is not a valid int")),
+        // Out-of-range literals such as `1e999` parse to infinity, which
+        // cannot be emitted as a Rust literal.
         (Value::Number(v), PropertyKind::Float) => v
             .parse::<f64>()
+            .ok()
+            .filter(|value| value.is_finite())
             .map(|v| quote!(#v))
-            .map_err(|_| format!("`{v}` is not a valid float")),
+            .ok_or_else(|| format!("`{v}` is not a valid float")),
         _ => Err("property initial value has the wrong type".into()),
     }
 }
@@ -858,6 +862,17 @@ mod tests {
             error.contains("`enabled` is not supported on `Text`"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn rejects_out_of_range_float_literals() {
+        let input = parser::parse("export component App { property <float> x: 1e999; }").unwrap();
+        let error = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap_err();
+        assert!(error.contains("`1e999` is not a valid float"), "{error}");
     }
 
     #[test]
