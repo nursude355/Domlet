@@ -100,6 +100,23 @@ fn input_binding_is_two_way() -> Result<(), JsValue> {
 }
 
 #[wasm_bindgen_test]
+fn input_event_fired_during_notification_is_ignored() -> Result<(), JsValue> {
+    let dom = DomBuilder::from_browser()?;
+    let element = dom.element("input", "test-checkbox")?;
+    element.set_attribute("type", "checkbox")?;
+    let property = Property::new(false);
+    let _binding = dom.bind_checked(&element, &property)?;
+    let target = element.clone();
+    // Re-firing the bound input's event from an observer used to panic.
+    let _feedback = property.observe(move |_| {
+        let _ = target.dispatch_event(&Event::new("change").unwrap());
+    });
+    property.set(true);
+    assert!(property.get());
+    Ok(())
+}
+
+#[wasm_bindgen_test]
 fn listener_invokes_callback_and_unregisters_on_drop() -> Result<(), JsValue> {
     let dom = DomBuilder::from_browser()?;
     let button = dom.element("button", "test-button")?;
