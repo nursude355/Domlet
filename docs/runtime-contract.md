@@ -36,8 +36,10 @@ observers, returning `UpdateCycle` without modifying that property's value.
 methods `set` and `invoke` panic on these programming errors. Use the fallible
 methods when handling user-defined feedback. Earlier changes in a chain are
 not rolled back when a later update is rejected. Generated event listeners
-use `try_invoke`: a handler which synchronously re-dispatches its own event
-(for example with `element.click()`) does not run again recursively.
+use `try_invoke`, and the two-way `text`, `checked`, and slider `value`
+bindings use `try_set`: an event re-dispatched synchronously while it is being
+handled (for example with `element.click()` from a callback or observer) is
+ignored instead of running again recursively.
 
 Only imports from `std-widgets.slint` for supported standard widgets are accepted.
 Unsupported imports, duplicate members, reserved generated identifiers, invalid
@@ -77,8 +79,10 @@ unmount with externally retained property handles. CI also checks the deployed
 WASM size, separately from the raw compiler artifact. The example enables the
 optional RPC client, so its deployed-package budget is 200 KB.
 
-Release preparation: CI verifies both packages with `cargo package -p
-slint-dom-macros` and `cargo package -p slint-dom`; current Cargo resolves the
-unpublished macro crate from the workspace while packaging. Publishing still
-has to follow dependency order: publish `slint-dom-macros` first, then
+Release preparation: CI fully verifies `slint-dom-macros`, then packages both
+workspace crates together with `--no-verify` so the root archive can be
+inspected before the matching macro version exists in the registry. Workspace
+and browser tests validate the local pair. Publish `slint-dom-macros` first,
+wait until that version is available from crates.io, then run `cargo package -p
+slint-dom --locked` for the final independent verification and publish
 `slint-dom`. No publication is performed by the CI workflow.
