@@ -6,17 +6,17 @@
 //! 
 //! The crate is intended for small Rust/WASM control panels, telemetry
 //! displays, and embedded-devices' web UIs that can run complex code (such as
-//! generating statistics or charts, codend in Rust) in the browser, and want
-//! to use Slint for the UI layout and styling without doingh the full official
-//! slint compilation, using DOM generated Widgets rather then WASM rendered 
-//! Widgets and by that drastically reduces the size of the WASM binary . 
+//! generating statistics or charts, coded in Rust) in the browser, and want
+//! to use Slint for the UI layout and styling without doing the full official
+//! slint compilation, using DOM generated Widgets rather than WASM rendered 
+//! Widgets and by that drastically reduces the size of the WASM binary. 
 //! 
 //! A WASM example is provided that shows how to use the crate to create a simple 
 //! line chart and some widgets with a Slint UI.
 //! 
 //! A Server example is provided that creates a web server application that
-//! the WASM example can connect to and shows sending unsolicted messages 
-//! in both direction via WebSockets using an RPC protocol.
+//! the WASM example can connect to and shows sending unsolicited messages 
+//! in both directions via WebSockets using an RPC protocol.
 //! 
 mod callback;
 mod chart;
