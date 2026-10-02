@@ -17,6 +17,8 @@
 //! A Server example is provided that creates a web server application that
 //! the WASM example can connect to and shows sending unsolicited messages
 //! in both directions via WebSockets using an RPC protocol.
+//! The server example can bne compiled as well for a desktop development server
+//! as for a Raspberry Pi Pico W with the W5500 ethernet module and run on the device.
 //!
 mod callback;
 mod chart;
