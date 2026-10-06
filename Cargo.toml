@@ -14,7 +14,9 @@ include = [
     "README.md",
     "CHANGELOG.md",
     "LICENSE-MIT",
-    "docs/**",
+    # User documentation only; internal design drafts in docs/design/ stay out.
+    "docs/guide.md",
+    "docs/runtime-contract.md",
 ]
 keywords = ["slint", "wasm", "web", "gui", "dom"]
 categories = ["gui", "web-programming", "wasm"]

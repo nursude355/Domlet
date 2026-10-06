@@ -1,11 +1,52 @@
 # slint-dom
 
+> `slint-dom` is an independent project. It is not affiliated with or
+> endorsed by Slint / SixtyFPS GmbH and contains no Slint code.
+
 `slint-dom` turns a small, web-focused subset of a `.slint` UI into ordinary
-browser DOM elements. The `.slint` parser is used only while compiling; it is
-not included in the deployed WebAssembly file.
+browser DOM elements. slint-dom has its own, independently written `.slint`
+parser (not Slint's). It runs only while compiling and is not included in the
+deployed WebAssembly file.
 
 It is intended for small Rust/WASM control panels, telemetry displays, and
 embedded-device web UIs where a full browser renderer is unnecessary.
+
+## What slint-dom can do
+
+- **Write the UI in `.slint`**, compile it to real HTML elements: `Text`,
+  `Button`, `LineEdit`, `CheckBox`, `Slider`, `Image`, `Rectangle`,
+  `TouchArea`, vertical and horizontal layouts.
+- **Use it from Rust**: `include_ui!` generates a typed component with getters,
+  setters, observable properties, and callback handlers.
+- **Two-way bindings** for text inputs, checkboxes, and sliders; `visible` and
+  `enabled` bindings, including `!property`.
+- **Sizes, colors, and accessibility**: Slint length units, hex colors,
+  screen-reader labels, roles, and live regions.
+- **Located compile errors**: unsupported input is rejected with file, line,
+  and column.
+- **Small output**: the parser runs only at compile time; the example UI ships
+  as roughly 150 KB of WebAssembly.
+- **Optional WebSocket/JSON-RPC client** for talking to a device, a lightweight
+  SVG line chart, and example servers for the desktop (Axum) and a Raspberry
+  Pi Pico 2 + W5500 (`no_std`, no heap).
+- **Aims at Slint compatibility**: the repository's test and example `.slint`
+  files are also compiled with the official Slint compiler in CI; known
+  differences are listed in the [guide](docs/guide.md#5-what-is-not-supported).
+
+How to write `.slint` files for slint-dom, what each declaration becomes in
+Rust, and the full list of supported features: see the
+[guide](docs/guide.md).
+
+## Planned
+
+Not available yet:
+
+- Closing the remaining differences from Slint (`<=>` two-way bindings,
+  `@image-url`, element-specific properties).
+- Typed RPC: call a Rust function on the device from the browser
+  (`set_brightness(80).await`), and let the device call browser functions.
+- More elements and language features (for example `for` lists and `if`
+  conditions) where they map well to HTML.
 
 ## Quick start
 

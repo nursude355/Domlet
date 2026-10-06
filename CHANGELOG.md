@@ -27,7 +27,11 @@ Semantic Versioning while its public API is still below 1.0.
   (`visible: !root.active;`); this is the same as writing `name`.
 - CI compiles every `.slint` file in `tests/ui/` and `example/ui/main.slint`
   with the official Slint compiler (`tests/slint-compat`, using
-  `slint-build`), so files accepted by slint-dom stay valid Slint.
+  `slint-build`), so the project's own test and example files stay valid
+  Slint.
+- A user guide (`docs/guide.md`, also in the crate package): what slint-dom
+  is, how `.slint` declarations map to the generated Rust API, the supported
+  elements, properties, and values, and the known differences from Slint.
 
 ### Fixed
 
