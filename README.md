@@ -183,9 +183,28 @@ and colors, `accessible-label`, `accessible-role`, `accessible-live-region`,
 and `!property` with `enabled` or `visible`. Slint enum values are unquoted:
 write `accessible-role: image;`, not `accessible-role: "image";`.
 
+Properties can be declared as `property`, `in property`, `out property`, or
+`in-out property`; slint-dom generates the same Rust API for all of them
+(`status()`, `set_status()`, `status_property()`). The official Slint
+compiler only exposes `in`, `out`, and `in-out` properties to Rust, so declare
+every property your Rust code uses with one of these if the same `.slint`
+file should also work with Slint. A value may name a property with or without
+`root.`: `text: root.status;` and `text: status;` are the same.
+
+Lengths use Slint units: `px`, `phx`, `rem`, `cm`, `mm`, `in`, `pt`, `%` (only
+on `width` and `height`, as in Slint), or a unitless `0`. CSS-only units such
+as `em`, `vh`, and `vw` are rejected. `phx` (physical pixels) is emitted as CSS
+`px`, so it matches Slint only at a device pixel ratio of 1. Colors are
+unquoted: `background: #eef4ff;` or a named color (`transparent`, `black`,
+`white`, `red`, `green`, `blue`), not `"#eef4ff"`.
+
+The repository's CI compiles its test and example `.slint` files with the
+official Slint compiler as well (`tests/slint-compat`).
+
 This is not a replacement for every Slint feature: callback parameters, general
-expressions, repeaters, conditionals, custom components, and arbitrary imports
-are deliberately rejected with compile-time errors.
+expressions, string interpolation (`"\{value}"`), repeaters, conditionals,
+custom components, and arbitrary imports are deliberately rejected with
+compile-time errors.
 
 ## Optional WebSocket/RPC
 

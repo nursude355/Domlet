@@ -3,7 +3,38 @@
 All notable changes to this project are documented here. The project follows
 Semantic Versioning while its public API is still below 1.0.
 
-## [0.2.0] - Unreleased
+## [Unreleased]
+
+### Breaking
+
+- String interpolation (`"Count: \{count}"`) is a compile error pointing at
+  the `\{`. It used to produce the literal text `{count}`; Slint would insert
+  the value. Build the text in Rust and bind a string property instead.
+- Lengths accept only Slint units: `px`, `phx`, `rem`, `cm`, `mm`, `in`, `pt`,
+  `%` (on `width` and `height` only, as in Slint), or unitless `0`. The
+  CSS-only units `em`, `vh`, and `vw` are rejected with an error naming the
+  supported units. `phx` is emitted as CSS `px`.
+- Colors and lengths must be unquoted literals: write `background: #eef4ff;`
+  and `width: 12px;`, not `"#eef4ff"` or `"12px"`. Color literals are no
+  longer accepted as string values.
+
+### Added
+
+- Slint's `in property`, `out property`, and `in-out property` declarations.
+  They generate the same Rust API as a plain `property` (`name()`,
+  `set_name()`, `name_property()`); `out` is not yet read-only from Rust.
+- Values can name root properties as `root.name`, also negated
+  (`visible: !root.active;`); this is the same as writing `name`.
+- CI compiles every `.slint` file in `tests/ui/` and `example/ui/main.slint`
+  with the official Slint compiler (`tests/slint-compat`, using
+  `slint-build`), so files accepted by slint-dom stay valid Slint.
+
+### Fixed
+
+- Element id errors (for example a duplicate id in `status := Text { ... }`)
+  point at the id instead of at the element kind.
+
+## [0.2.0] - 2026-09-30
 
 ### Breaking
 
@@ -48,5 +79,6 @@ Semantic Versioning while its public API is still below 1.0.
 
 - Initial crates.io release.
 
+[Unreleased]: https://github.com/nursude355/Slint_Dom/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/nursude355/Slint_Dom/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nursude355/Slint_Dom/releases/tag/v0.1.0

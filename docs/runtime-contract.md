@@ -15,7 +15,10 @@ declared minimum, and applications target `wasm32-unknown-unknown`.
 Supported features include direct string/bool bindings, two-way input,
 checkbox and slider state, zero-argument callbacks, element IDs, accessible
 labels/roles, and basic HTML controls and layouts. `!property` is supported
-for boolean `enabled` and `visible` bindings. General Slint expressions,
+for boolean `enabled` and `visible` bindings. Bindings may be written with a
+`root.` prefix (`root.status`, `!root.active`). `in`, `out`, and `in-out`
+property declarations generate the same Rust accessors as plain `property`;
+no access restriction is enforced for `out` yet. General Slint expressions,
 conditional/repeated elements, callback parameters, and user-component imports
 remain deliberately outside this focused subset.
 
@@ -43,8 +46,19 @@ ignored instead of running again recursively.
 
 Only imports from `std-widgets.slint` for supported standard widgets are accepted.
 Unsupported imports, duplicate members, reserved generated identifiers, invalid
-CSS lengths, and children of void elements are compilation errors. CSS lengths
-must be non-negative finite values with a supported unit, or unitless zero.
+CSS lengths, string interpolation (`"\{...}"`), and children of void elements
+are compilation errors. Lengths
+must be unquoted, non-negative finite values with a Slint unit, or unitless
+zero. Supported units are `px`, `phx`, `rem`, `cm`, `mm`, `in`, and `pt`, plus
+`%` on `width` and `height` (Slint converts percentages to lengths only
+there). `em`, `vh`, and `vw` are rejected. Units are passed to CSS unchanged,
+except `phx` (physical pixels), which is emitted as CSS `px` and therefore
+equals Slint's size only at a device pixel ratio of 1. CSS and Slint use the
+same factors for `cm`, `mm`, `in`, and `pt` (1in = 96px); Slint's `rem` is
+relative to the window's default font size, CSS `rem` to the page's root font
+size. Colors must be unquoted hex literals (`#rgb`, `#rgba`, `#rrggbb`,
+`#rrggbbaa`) or one of `transparent`, `black`, `white`, `red`, `green`,
+`blue`; quoted colors such as `"#fff"` are rejected.
 
 `accepted` fires on Enter (excluding key repeats and IME composition), while
 `edited` fires on input. Disabled elements do not invoke generated callbacks.
@@ -71,7 +85,15 @@ cargo clippy --workspace --all-targets -- -D warnings
 wasm-pack test --headless --chrome
 wasm-pack build example --target web --release --out-dir pkg --locked
 cargo test --manifest-path example-server/Cargo.toml --locked
+cargo build --manifest-path tests/slint-compat/Cargo.toml --locked
 ```
+
+The last command compiles every `.slint` file in `tests/ui/` and
+`example/ui/main.slint` with the official Slint compiler (`slint-build`, in a
+separate workspace with its own lockfile) and fails if any of them is not
+valid Slint. `tests/ui/compat.slint` is compiled by both compilers and covers
+the Slint syntax slint-dom accepts (`in`/`out`/`in-out` properties, `root.`
+bindings, length units, and color literals).
 
 The browser suite includes a real generated component, two-way input and
 checkbox updates, callback delivery, keyboard acceptance, disabled clicks, and

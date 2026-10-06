@@ -25,10 +25,16 @@ jobs:
           workspaces: |
             . -> target
             example-server -> target
+            tests/slint-compat -> target
       - name: Run workspace tests
         run: cargo test --workspace --all-features --locked
       - name: Test desktop example server
         run: cargo test --manifest-path example-server/Cargo.toml --locked
+      # Every .slint file in tests/ui/ and example/ui/main.slint must also be
+      # valid for the official Slint compiler (slint-build). Separate
+      # workspace and lockfile; a cold build took about 80 s locally.
+      - name: Compile shared .slint files with the official Slint compiler
+        run: cargo build --manifest-path tests/slint-compat/Cargo.toml --locked
 
   msrv:
     name: MSRV (Windows)

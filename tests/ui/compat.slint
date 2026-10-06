@@ -1,0 +1,22 @@
+// Accepted by slint-dom (tests/compat.rs) and by the official Slint compiler
+// (tests/slint-compat). Keep it to syntax that means the same in both.
+import { Button, CheckBox } from "std-widgets.slint";
+
+export component Compat inherits Window {
+    in property <string> status: "Ready";
+    out property <bool> active: false;
+    in-out property <int> count: 3;
+    property <float> level: 0.5;
+    callback start();
+
+    VerticalLayout {
+        padding: 2mm;
+        spacing: 4px;
+        status-label := Text { text: root.status; }
+        Rectangle { width: 50%; height: 2phx; min-width: 1cm; max-width: 10in; border-radius: 4pt; background: #eef4ff; }
+        Rectangle { width: 0; height: 1rem; background: transparent; }
+        Text { text: "Inactive"; visible: !root.active; }
+        start-button := Button { text: "Start"; enabled: root.active; clicked => { root.start(); } }
+        CheckBox { checked: active; }
+    }
+}

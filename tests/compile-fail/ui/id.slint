@@ -1,0 +1,6 @@
+export component App {
+    in-out property <string> status;
+    VerticalLayout {
+        status := Text { text: root.status; }
+    }
+}
