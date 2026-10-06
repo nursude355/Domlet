@@ -17,6 +17,11 @@ Semantic Versioning while its public API is still below 1.0.
 - Colors and lengths must be unquoted literals: write `background: #eef4ff;`
   and `width: 12px;`, not `"#eef4ff"` or `"12px"`. Color literals are no
   longer accepted as string values.
+- `rpc::Message::id` is now `Option<rpc::Id>` instead of `Option<u64>` so
+  JSON-RPC string identifiers are preserved alongside numeric identifiers.
+- `RpcClient::request` now accepts `impl Into<rpc::Id>` instead of `u64`.
+  Calls that explicitly supplied the payload type with `request::<T>(...)` no
+  longer compile; let Rust infer the payload type instead.
 
 ### Added
 
@@ -32,11 +37,19 @@ Semantic Versioning while its public API is still below 1.0.
 - A user guide (`docs/guide.md`, also in the crate package): what slint-dom
   is, how `.slint` declarations map to the generated Rust API, the supported
   elements, properties, and values, and the known differences from Slint.
+- Generated components provide `keep_alive()` for page-lifetime applications,
+  so callers no longer need to use `std::mem::forget` directly.
+- `Property::set_if_changed` and `Property::try_set_if_changed` skip redundant
+  observer notifications while preserving explicit update-cycle errors.
+- `rpc::Id` represents numeric and string JSON-RPC request identifiers.
 
 ### Fixed
 
 - Element id errors (for example a duplicate id in `status := Text { ... }`)
   point at the id instead of at the element kind.
+- The example status text is again announced as a polite ARIA live region.
+- Generated setters and two-way DOM bindings skip updates when a property is
+  already equal to the new value, avoiding redundant observer notifications.
 
 ## [0.2.0] - 2026-09-30
 

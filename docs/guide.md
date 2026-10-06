@@ -78,7 +78,7 @@ pub fn start() -> Result<(), JsValue> {
     app.on_start(move || status.set("Running".into()));
 
     // Keep the component alive for the lifetime of the page.
-    std::mem::forget(app);
+    app.keep_alive();
     Ok(())
 }
 ```
@@ -88,7 +88,7 @@ pub fn start() -> Result<(), JsValue> {
 
 | In `.slint` | Generated Rust |
 |---|---|
-| `export component MainWindow inherits Window` | `struct MainWindow` with `mount(&parent)`, `mount_to_body()`, `root()`, `unmount(self)` |
+| `export component MainWindow inherits Window` | `struct MainWindow` with `mount(&parent)`, `mount_to_body()`, `root()`, `unmount(self)`, `keep_alive(self)` |
 | `in-out property <string> status` | `status() -> String`, `set_status(String)`, `status_property() -> Property<String>` |
 | `property <bool> active` | `active()`, `set_active(bool)`, `active_property()` |
 | `callback start();` | `on_start(impl FnMut() + 'static)` |
@@ -231,8 +231,12 @@ supported alternative.
 
 Enable the `rpc` feature (`slint-dom = { version = "...", features = ["rpc"] }`)
 for a small JSON-RPC 2.0 client over WebSocket (`slint_dom::rpc::RpcClient`).
-The [`example-server`](../example-server/README.md) shows a desktop server and
-a Raspberry Pi Pico 2 + W5500 firmware that serve the page and answer calls.
+Request identifiers are `rpc::Id` values, either numbers or strings; plain
+numbers and strings convert automatically, for example
+`client.request(7, "command", &params)` or `client.request("a1", ...)`.
+The [`example-server`](https://github.com/nursude355/Slint_Dom/blob/main/example-server/README.md)
+shows a desktop server and a Raspberry Pi Pico 2 + W5500 firmware that serve
+the page and answer calls.
 
 Today the calls are untyped (method names and JSON values). Typed calls in both
 directions (browser calls device functions, device calls browser functions) are

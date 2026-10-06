@@ -74,7 +74,8 @@ pub fn start() -> Result<(), JsValue> {
                 return;
             }
             next_id += 1;
-            if let Err(error) = rpc.request(next_id, "command", &command.get()) {
+            let request_id = slint_dom::rpc::Id::Number(next_id);
+            if let Err(error) = rpc.request(request_id, "command", &command.get()) {
                 status.set(format!("RPC send failed: {error:?}"));
             }
         });

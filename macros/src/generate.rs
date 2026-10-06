@@ -57,7 +57,7 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
         constructors.push(quote!(#name));
         methods.push(quote! {
             pub fn #name(&self) -> #ty { self.#name.get() }
-            pub fn #setter(&self, value: #ty) { self.#name.set(value); }
+            pub fn #setter(&self, value: #ty) { self.#name.set_if_changed(value); }
             pub fn #property_handle(&self) -> ::slint_dom::Property<#ty> { self.#name.clone() }
         });
     }
@@ -132,6 +132,9 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
 
             pub fn root(&self) -> &::slint_dom::__private::Element { &self.root }
             pub fn unmount(self) { self.root.remove(); }
+            /// Keeps this component and its event bindings alive for the
+            /// remaining lifetime of the page.
+            pub fn keep_alive(self) { ::std::mem::forget(self); }
             #(#methods)*
         }
     })
@@ -573,7 +576,7 @@ fn validate(component: &Component) -> GenerationResult<()> {
     .into_iter()
     .map(str::to_owned)
     .collect();
-    let mut methods: HashSet<String> = ["mount", "mount_to_body", "root", "unmount"]
+    let mut methods: HashSet<String> = ["mount", "mount_to_body", "root", "unmount", "keep_alive"]
         .into_iter()
         .map(str::to_owned)
         .collect();
@@ -786,7 +789,14 @@ mod tests {
     use crate::parser;
     #[test]
     fn rejects_internal_names_and_invalid_css() {
-        for name in ["dom", "events", "subscriptions", "parent", "__node_0"] {
+        for name in [
+            "dom",
+            "events",
+            "subscriptions",
+            "parent",
+            "keep_alive",
+            "__node_0",
+        ] {
             let source = format!("export component App {{ property <bool> {name}: true; }}");
             let input = parser::parse(&source).unwrap();
             assert!(
@@ -815,6 +825,7 @@ mod tests {
             output.contains("set_enabled")
                 && output.contains("on_go")
                 && output.contains("bind_enabled")
+                && output.contains("keep_alive")
                 && output.contains("dom . listen")
         );
     }

@@ -132,14 +132,17 @@ pub fn start() -> Result<(), JsValue> {
     app.on_start(move || status.set("Running".into()));
 
     // Keep the generated component alive for the lifetime of the page.
-    std::mem::forget(app);
+    app.keep_alive();
     Ok(())
 }
 ```
 
 `include_ui!` generates the Rust type `MainWindow` from the `.slint` file.
 The UI becomes visible only when that generated component is mounted, here via
-`MainWindow::mount_to_body()`.
+`MainWindow::mount_to_body()`. Calling `keep_alive()` intentionally retains the
+component and its event bindings for a page-lifetime application. Applications
+that manage their own lifecycle should store the component and call `unmount()`
+when it is no longer needed.
 
 ### 5. Create the web page
 
@@ -250,10 +253,12 @@ compile-time errors.
 ## Optional WebSocket/RPC
 
 Enable `slint-dom = { version = "0.2", features = ["rpc"] }` to use the small
-browser JSON-RPC 2.0 transport. The complete local server and command-line/
-telemetry example is in [`example-server/`](example-server/README.md). It can
-run either as a Tokio/Axum desktop server or as a `no_std`, no-heap Embassy
-server on a Raspberry Pi Pico 2 with W5500 Ethernet.
+browser JSON-RPC 2.0 transport. Requests accept numeric or string IDs through
+`rpc::Id`, and incoming messages preserve either form. The complete local
+server and command-line/telemetry example is in
+[`example-server/`](example-server/README.md). It can run either as a
+Tokio/Axum desktop server or as a `no_std`, no-heap Embassy server on a
+Raspberry Pi Pico 2 with W5500 Ethernet.
 
 ## Before publishing an application
 

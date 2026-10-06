@@ -17,9 +17,35 @@ type MessageHandler = Rc<RefCell<Option<Box<dyn FnMut(Message)>>>>;
 struct Outbound<'a, T: Serialize> {
     jsonrpc: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
-    id: Option<u64>,
+    id: Option<Id>,
     method: &'a str,
     params: &'a T,
+}
+
+/// A JSON-RPC request or response identifier.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum Id {
+    Number(u64),
+    String(String),
+}
+
+impl From<u64> for Id {
+    fn from(value: u64) -> Self {
+        Self::Number(value)
+    }
+}
+
+impl From<String> for Id {
+    fn from(value: String) -> Self {
+        Self::String(value)
+    }
+}
+
+impl From<&str> for Id {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_owned())
+    }
 }
 
 /// An incoming JSON-RPC notification or response.
@@ -27,7 +53,7 @@ struct Outbound<'a, T: Serialize> {
 pub struct Message {
     pub jsonrpc: String,
     #[serde(default)]
-    pub id: Option<u64>,
+    pub id: Option<Id>,
     #[serde(default)]
     pub method: Option<String>,
     #[serde(default)]
@@ -96,11 +122,16 @@ impl RpcClient {
     }
 
     /// Sends a JSON-RPC request. Responses are delivered to [`Self::on_message`].
-    pub fn request<T: Serialize>(&self, id: u64, method: &str, params: &T) -> Result<(), JsValue> {
-        self.send(Some(id), method, params)
+    pub fn request<T: Serialize>(
+        &self,
+        id: impl Into<Id>,
+        method: &str,
+        params: &T,
+    ) -> Result<(), JsValue> {
+        self.send(Some(id.into()), method, params)
     }
 
-    fn send<T: Serialize>(&self, id: Option<u64>, method: &str, params: &T) -> Result<(), JsValue> {
+    fn send<T: Serialize>(&self, id: Option<Id>, method: &str, params: &T) -> Result<(), JsValue> {
         let text = serde_json::to_string(&Outbound {
             jsonrpc: "2.0",
             id,
@@ -127,7 +158,7 @@ mod tests {
     fn outbound_message_is_json_rpc() {
         let encoded = serde_json::to_string(&Outbound {
             jsonrpc: "2.0",
-            id: Some(7),
+            id: Some(Id::Number(7)),
             method: "command",
             params: &"status",
         })
@@ -136,5 +167,25 @@ mod tests {
             encoded,
             r#"{"jsonrpc":"2.0","id":7,"method":"command","params":"status"}"#
         );
+    }
+
+    #[test]
+    fn string_ids_are_serialized_and_deserialized() {
+        let encoded = serde_json::to_string(&Outbound {
+            jsonrpc: "2.0",
+            id: Some(Id::from("command-8")),
+            method: "command",
+            params: &"status",
+        })
+        .unwrap();
+        assert_eq!(
+            encoded,
+            r#"{"jsonrpc":"2.0","id":"command-8","method":"command","params":"status"}"#
+        );
+
+        let response: Message =
+            serde_json::from_str(r#"{"jsonrpc":"2.0","id":"command-8","result":{"ok":true}}"#)
+                .unwrap();
+        assert_eq!(response.id, Some(Id::String("command-8".into())));
     }
 }

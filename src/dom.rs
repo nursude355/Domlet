@@ -72,7 +72,7 @@ impl DomBuilder {
         let property = property.clone();
         let mut binding = EventBinding::new(element, "input", move |_| {
             // Ignore feedback while this property is already notifying.
-            let _ = property.try_set(input.value());
+            let _ = property.try_set_if_changed(input.value());
         })?;
         binding.subscription = Some(subscription);
         Ok(binding)
@@ -84,10 +84,14 @@ impl DomBuilder {
     ) -> Result<EventBinding, JsValue> {
         let input = element.clone().dyn_into::<HtmlInputElement>()?;
         let observed_input = input.clone();
-        let subscription = property.observe(move |value| observed_input.set_checked(*value));
+        let subscription = property.observe(move |value| {
+            if observed_input.checked() != *value {
+                observed_input.set_checked(*value);
+            }
+        });
         let property = property.clone();
         let mut binding = EventBinding::new(element, "change", move |_| {
-            let _ = property.try_set(input.checked());
+            let _ = property.try_set_if_changed(input.checked());
         })?;
         binding.subscription = Some(subscription);
         Ok(binding)
@@ -99,13 +103,16 @@ impl DomBuilder {
     ) -> Result<EventBinding, JsValue> {
         let input = element.clone().dyn_into::<HtmlInputElement>()?;
         let observed_input = input.clone();
-        let subscription =
-            property.observe(move |value| observed_input.set_value_as_number(*value));
+        let subscription = property.observe(move |value| {
+            if observed_input.value_as_number() != *value {
+                observed_input.set_value_as_number(*value);
+            }
+        });
         let property = property.clone();
         let mut binding = EventBinding::new(element, "input", move |_| {
             let value = input.value_as_number();
             if value.is_finite() {
-                let _ = property.try_set(value);
+                let _ = property.try_set_if_changed(value);
             }
         })?;
         binding.subscription = Some(subscription);
@@ -118,13 +125,17 @@ impl DomBuilder {
     ) -> Result<EventBinding, JsValue> {
         let input = element.clone().dyn_into::<HtmlInputElement>()?;
         let observed_input = input.clone();
-        let subscription =
-            property.observe(move |value| observed_input.set_value_as_number(f64::from(*value)));
+        let subscription = property.observe(move |value| {
+            let value = f64::from(*value);
+            if observed_input.value_as_number() != value {
+                observed_input.set_value_as_number(value);
+            }
+        });
         let property = property.clone();
         let mut binding = EventBinding::new(element, "input", move |_| {
             let value = input.value_as_number();
             if value.is_finite() && value >= f64::from(i32::MIN) && value <= f64::from(i32::MAX) {
-                let _ = property.try_set(value.round() as i32);
+                let _ = property.try_set_if_changed(value.round() as i32);
             }
         })?;
         binding.subscription = Some(subscription);

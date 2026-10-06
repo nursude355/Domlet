@@ -28,10 +28,21 @@ Dropping a component without calling `unmount()` leaves the last DOM snapshot,
 but disconnects its bindings and listeners. Externally cloned properties remain
 usable and no longer update that snapshot.
 
+For applications that intentionally run for the lifetime of the browser page,
+the generated `keep_alive(self)` method retains the component and all of its
+bindings. This is an explicit page-lifetime allocation; it cannot later be
+unmounted. Applications with a shorter lifecycle should store the component
+instead and eventually call `unmount()`.
+
 `Property::observe` returns a `Subscription`. Retain that token for as long as
 updates are required. Dropping it releases the observer's captured values.
 Observers receive an initial value immediately and subsequent values
 synchronously in registration order.
+
+`set_if_changed` skips observer notification when the new value equals the
+current value. Generated property setters and two-way DOM bindings use this
+behavior to avoid redundant update chains. `set` remains available for types
+without `PartialEq` and always notifies.
 
 `try_set` rejects an update to a property which is currently notifying its
 observers, returning `UpdateCycle` without modifying that property's value.
@@ -40,9 +51,14 @@ methods `set` and `invoke` panic on these programming errors. Use the fallible
 methods when handling user-defined feedback. Earlier changes in a chain are
 not rolled back when a later update is rejected. Generated event listeners
 use `try_invoke`, and the two-way `text`, `checked`, and slider `value`
-bindings use `try_set`: an event re-dispatched synchronously while it is being
+bindings use `try_set_if_changed`: an event re-dispatched synchronously while it is being
 handled (for example with `element.click()` from a callback or observer) is
 ignored instead of running again recursively.
+
+With the `rpc` feature, JSON-RPC request and response identifiers use
+`rpc::Id`. Numeric `u64` identifiers and owned or borrowed string identifiers
+are accepted by `RpcClient::request`; incoming `Message` values preserve both
+forms. Notifications continue to omit the identifier.
 
 Only imports from `std-widgets.slint` for supported standard widgets are accepted.
 Unsupported imports, duplicate members, reserved generated identifiers, invalid

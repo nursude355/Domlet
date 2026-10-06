@@ -62,6 +62,17 @@ impl<T: Clone + 'static> Property<T> {
             .expect("cyclic property update; use try_set to handle feedback explicitly");
     }
 
+    /// Updates the value only when it differs from the current value.
+    ///
+    /// Returns `true` when observers were notified.
+    pub fn set_if_changed(&self, value: T) -> bool
+    where
+        T: PartialEq,
+    {
+        self.try_set_if_changed(value)
+            .expect("cyclic property update; use try_set_if_changed to handle feedback explicitly")
+    }
+
     /// Rejects recursive feedback before modifying the value.
     pub fn try_set(&self, value: T) -> Result<(), UpdateCycle> {
         if self.notifying.replace(true) {
@@ -82,6 +93,21 @@ impl<T: Clone + 'static> Property<T> {
             }
         }
         Ok(())
+    }
+
+    /// Fallible variant of [`Self::set_if_changed`].
+    ///
+    /// A no-op succeeds even while the property is notifying. A changed value
+    /// still returns [`UpdateCycle`] in that situation.
+    pub fn try_set_if_changed(&self, value: T) -> Result<bool, UpdateCycle>
+    where
+        T: PartialEq,
+    {
+        if self.inner.borrow().value == value {
+            return Ok(false);
+        }
+        self.try_set(value)?;
+        Ok(true)
     }
 
     pub fn observe(&self, observer: impl Fn(&T) + 'static) -> Subscription {
@@ -153,6 +179,37 @@ mod tests {
         let _subscription = property.observe(move |value| output.borrow_mut().push(*value));
         property.set(2);
         assert_eq!(*seen.borrow(), vec![1, 2]);
+    }
+
+    #[test]
+    fn set_if_changed_skips_equal_values() {
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let property = Property::new(1);
+        let output = seen.clone();
+        let _subscription = property.observe(move |value| output.borrow_mut().push(*value));
+
+        assert!(!property.set_if_changed(1));
+        assert!(property.set_if_changed(2));
+        assert_eq!(*seen.borrow(), vec![1, 2]);
+    }
+
+    #[test]
+    fn try_set_if_changed_distinguishes_noop_while_notifying() {
+        let property = Property::new(0);
+        let recursive = property.clone();
+        let outcomes = Rc::new(RefCell::new(Vec::new()));
+        let output = outcomes.clone();
+        let _subscription = property.observe(move |value| {
+            if *value == 1 {
+                output.borrow_mut().push(recursive.try_set_if_changed(1));
+                output.borrow_mut().push(recursive.try_set_if_changed(2));
+            }
+        });
+
+        property.set(1);
+
+        assert_eq!(*outcomes.borrow(), vec![Ok(false), Err(UpdateCycle)]);
+        assert_eq!(property.get(), 1);
     }
 
     #[test]
