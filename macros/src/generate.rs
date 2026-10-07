@@ -52,13 +52,13 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
         let ty = rust_type(property.kind);
         let initial = at(property.offset, literal(&property.initial, property.kind))?;
         property_types.insert(property.name.clone(), property.kind);
-        fields.push(quote!(#name: ::slint_dom::Property<#ty>));
-        initializers.push(quote!(let #name = ::slint_dom::Property::new(#initial);));
+        fields.push(quote!(#name: ::domlet::Property<#ty>));
+        initializers.push(quote!(let #name = ::domlet::Property::new(#initial);));
         constructors.push(quote!(#name));
         methods.push(quote! {
             pub fn #name(&self) -> #ty { self.#name.get() }
             pub fn #setter(&self, value: #ty) { self.#name.set_if_changed(value); }
-            pub fn #property_handle(&self) -> ::slint_dom::Property<#ty> { self.#name.clone() }
+            pub fn #property_handle(&self) -> ::domlet::Property<#ty> { self.#name.clone() }
         });
     }
 
@@ -67,8 +67,8 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
         let name = at(callback.offset, rust_ident(&callback.name))?;
         let on_name = format_ident!("on_{}", normalized(&callback.name));
         callback_names.insert(callback.name.clone());
-        fields.push(quote!(#name: ::slint_dom::Callback));
-        initializers.push(quote!(let #name = ::slint_dom::Callback::default();));
+        fields.push(quote!(#name: ::domlet::Callback));
+        initializers.push(quote!(let #name = ::domlet::Callback::default();));
         constructors.push(quote!(#name));
         methods.push(quote! {
             pub fn #on_name(&self, handler: impl FnMut() + 'static) { self.#name.set(handler); }
@@ -79,10 +79,10 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
     collect_ids(&component.children, &mut ids);
     for (id, offset) in &ids {
         let name = at(*offset, rust_ident(id))?;
-        fields.push(quote!(#name: ::slint_dom::__private::Element));
+        fields.push(quote!(#name: ::domlet::__private::Element));
         constructors.push(quote!(#name));
         methods.push(quote! {
-            pub fn #name(&self) -> &::slint_dom::__private::Element { &self.#name }
+            pub fn #name(&self) -> &::domlet::__private::Element { &self.#name }
         });
     }
 
@@ -104,33 +104,33 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
         const _: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", #source_path));
 
         pub struct #component_name {
-            root: ::slint_dom::__private::Element,
+            root: ::domlet::__private::Element,
             #(#fields,)*
-            _events: ::std::vec::Vec<::slint_dom::EventBinding>,
-            _subscriptions: ::std::vec::Vec<::slint_dom::Subscription>,
+            _events: ::std::vec::Vec<::domlet::EventBinding>,
+            _subscriptions: ::std::vec::Vec<::domlet::Subscription>,
         }
 
         impl #component_name {
-            pub fn mount(parent: &::slint_dom::__private::Element) -> Result<Self, ::slint_dom::__private::JsValue> {
-                let dom = ::slint_dom::DomBuilder::from_browser()?;
+            pub fn mount(parent: &::domlet::__private::Element) -> Result<Self, ::domlet::__private::JsValue> {
+                let dom = ::domlet::DomBuilder::from_browser()?;
                 dom.install_default_style()?;
                 #title
                 #(#initializers)*
                 let mut events = ::std::vec::Vec::new();
                 let mut subscriptions = ::std::vec::Vec::new();
-                let root = dom.element(#root_tag, "sd-component")?;
+                let root = dom.element(#root_tag, "domlet-component")?;
                 #nodes
                 dom.append(parent, &root)?;
                 Ok(Self { root, #(#constructors,)* _events: events, _subscriptions: subscriptions })
             }
 
-            pub fn mount_to_body() -> Result<Self, ::slint_dom::__private::JsValue> {
-                let dom = ::slint_dom::DomBuilder::from_browser()?;
+            pub fn mount_to_body() -> Result<Self, ::domlet::__private::JsValue> {
+                let dom = ::domlet::DomBuilder::from_browser()?;
                 let body = dom.body()?;
                 Self::mount(&body)
             }
 
-            pub fn root(&self) -> &::slint_dom::__private::Element { &self.root }
+            pub fn root(&self) -> &::domlet::__private::Element { &self.root }
             pub fn unmount(self) { self.root.remove(); }
             /// Keeps this component and its event bindings alive for the
             /// remaining lifetime of the page.
@@ -704,67 +704,67 @@ fn widget(kind: &str) -> Result<Widget, String> {
     let result = match kind {
         "VerticalLayout" => Widget {
             tag: "div",
-            class: "sd-column",
+            class: "domlet-column",
             input_type: None,
             properties: &["padding", "spacing"],
         },
         "HorizontalLayout" => Widget {
             tag: "div",
-            class: "sd-row",
+            class: "domlet-row",
             input_type: None,
             properties: &["padding", "spacing"],
         },
         "GridLayout" => Widget {
             tag: "div",
-            class: "sd-grid",
+            class: "domlet-grid",
             input_type: None,
             properties: &["padding", "spacing"],
         },
         "Text" => Widget {
             tag: "span",
-            class: "sd-text",
+            class: "domlet-text",
             input_type: None,
             properties: &["text"],
         },
         "Button" => Widget {
             tag: "button",
-            class: "sd-button",
+            class: "domlet-button",
             input_type: Some("button"),
             properties: &["text"],
         },
         "LineEdit" | "TextInput" => Widget {
             tag: "input",
-            class: "sd-input",
+            class: "domlet-input",
             input_type: Some("text"),
             properties: &["text", "placeholder-text"],
         },
         "CheckBox" => Widget {
             tag: "input",
-            class: "sd-checkbox",
+            class: "domlet-checkbox",
             input_type: Some("checkbox"),
             properties: &["checked"],
         },
         "Slider" => Widget {
             tag: "input",
-            class: "sd-slider",
+            class: "domlet-slider",
             input_type: Some("range"),
             properties: &["value", "minimum", "maximum", "step"],
         },
         "Image" => Widget {
             tag: "img",
-            class: "sd-image",
+            class: "domlet-image",
             input_type: None,
             properties: &["source"],
         },
         "Rectangle" => Widget {
             tag: "div",
-            class: "sd-rectangle",
+            class: "domlet-rectangle",
             input_type: None,
             properties: &[],
         },
         "TouchArea" => Widget {
             tag: "button",
-            class: "sd-touch",
+            class: "domlet-touch",
             input_type: Some("button"),
             properties: &[],
         },
@@ -1094,7 +1094,7 @@ mod tests {
         let rt = r.unwrap().to_string();
         println!("------------------ Result String: {rt}");
 
-        assert!(rt.contains("let status = :: slint_dom :: Property :: new (:: std :: string :: String :: from (\"Ready\")) ;"));
+        assert!(rt.contains("let status = :: domlet :: Property :: new (:: std :: string :: String :: from (\"Ready\")) ;"));
     }
 
     #[test]

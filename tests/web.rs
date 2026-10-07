@@ -1,6 +1,6 @@
 #![cfg(target_arch = "wasm32")]
 
-use slint_dom::{Callback, DomBuilder, Property};
+use domlet::{Callback, DomBuilder, Property};
 use std::{cell::Cell, rc::Rc};
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_test::*;
@@ -8,7 +8,7 @@ use web_sys::{Event, HtmlInputElement};
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-slint_dom::include_ui!("tests/ui/lifecycle.slint");
+domlet::include_ui!("tests/ui/lifecycle.slint");
 
 #[wasm_bindgen_test]
 fn generated_events_respect_enter_and_disabled_state() -> Result<(), JsValue> {

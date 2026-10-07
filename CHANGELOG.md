@@ -7,6 +7,15 @@ Semantic Versioning while its public API is still below 1.0.
 
 ### Breaking
 
+- The project is renamed to `domlet`: the crates `slint-dom` and
+  `slint-dom-macros` are now `domlet` and `domlet-macros`, and the Rust path
+  is `domlet::` (for example `domlet::include_ui!`). The old crates were
+  removed from crates.io. The `.slint` file format is unchanged.
+- The generated CSS classes use the prefix `domlet-` instead of `sd-` (for
+  example `domlet-component`, `domlet-button`), the injected style element id
+  is `domlet-style` instead of `slint-dom-style`, and compile errors start
+  with `domlet:` instead of `slint-dom:`. Custom stylesheets that target the
+  old classes must be updated.
 - String interpolation (`"Count: \{count}"`) is a compile error pointing at
   the `\{`. It used to produce the literal text `{count}`; Slint would insert
   the value. Build the text in Rust and bind a string property instead.
@@ -34,7 +43,7 @@ Semantic Versioning while its public API is still below 1.0.
   with the official Slint compiler (`tests/slint-compat`, using
   `slint-build`), so the project's own test and example files stay valid
   Slint.
-- A user guide (`docs/guide.md`, also in the crate package): what slint-dom
+- A user guide (`docs/guide.md`, also in the crate package): what domlet
   is, how `.slint` declarations map to the generated Rust API, the supported
   elements, properties, and values, and the known differences from Slint.
 - Generated components provide `keep_alive()` for page-lifetime applications,
@@ -62,7 +71,7 @@ Semantic Versioning while its public API is still below 1.0.
 - `enabled` is accepted only on interactive elements (`Button`, `TouchArea`,
   `LineEdit`, `TextInput`, `CheckBox`, `Slider`). It is now a compile-time
   error on `Text`, `Rectangle`, and layouts, where it had no effect.
-- `slint-dom` requires `wasm-bindgen` 0.2.129 or newer.
+- The runtime crate requires `wasm-bindgen` 0.2.129 or newer.
 
 ### Added
 
@@ -96,6 +105,6 @@ Semantic Versioning while its public API is still below 1.0.
 
 - Initial crates.io release.
 
-[Unreleased]: https://github.com/nursude355/Slint_Dom/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/nursude355/Slint_Dom/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/nursude355/Slint_Dom/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nursude355/Domlet/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/nursude355/Domlet/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/nursude355/Domlet/releases/tag/v0.1.0

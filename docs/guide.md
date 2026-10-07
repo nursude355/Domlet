@@ -1,12 +1,12 @@
-# slint-dom guide
+# domlet guide
 
-This guide explains what slint-dom is, how to write `.slint` files for it, what
+This guide explains what domlet is, how to write `.slint` files for it, what
 Rust code you get from them, and what is supported today. For a five-minute
 setup, start with the [README quick start](../README.md#quick-start).
 
-## 1. What slint-dom is
+## 1. What domlet is
 
-slint-dom turns a user interface written in a `.slint` file into ordinary HTML
+domlet turns a user interface written in a `.slint` file into ordinary HTML
 elements in the browser, driven by Rust compiled to WebAssembly.
 
 ```text
@@ -20,7 +20,7 @@ ui/main.slint ──(include_ui! at compile time)──▶ Rust code ──▶ W
 - Typical use: control panels and status pages for embedded devices that serve
   their own web interface.
 
-slint-dom is an independent project. It is not part of Slint and contains no
+domlet is an independent project. It is not part of Slint and contains no
 Slint code; it only understands the `.slint` file format.
 
 ## 2. The `.slint` language
@@ -48,17 +48,17 @@ Where to learn it:
 
 - **General syntax** (components, properties, callbacks, layouts):
   the official Slint language documentation, <https://docs.slint.dev>.
-- **What slint-dom supports**: this guide (section 4). slint-dom supports a
+- **What domlet supports**: this guide (section 4). domlet supports a
   web-focused **subset**; everything else is rejected with a compile error.
 - **Editor support**: the official Slint extension for Visual Studio Code gives
   syntax highlighting and diagnostics. Its live preview renders with Slint
-  itself, so it can show features that slint-dom does not support; the
-  compiler errors from slint-dom are the reference.
+  itself, so it can show features that domlet does not support; the
+  compiler errors from domlet are the reference.
 
-Goal: every `.slint` file that slint-dom accepts should also be valid for the
+Goal: every `.slint` file that domlet accepts should also be valid for the
 official Slint compiler. The repository checks its own test and example files
 with the official compiler in CI (`tests/slint-compat`). This does not cover
-your files, and some input is still accepted by slint-dom but rejected by
+your files, and some input is still accepted by domlet but rejected by
 Slint (see "Known differences" in section 5).
 
 ## 3. From `.slint` to Rust
@@ -68,7 +68,7 @@ In your crate (a `cdylib` built with `wasm-pack`):
 ```rust
 use wasm_bindgen::prelude::*;
 
-slint_dom::include_ui!("ui/main.slint");
+domlet::include_ui!("ui/main.slint");
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -196,7 +196,7 @@ These are rejected with a compile error that names the file, line, and column:
 
 Known differences from real Slint (planned to be closed):
 
-- Two-way bindings use `:` in slint-dom; real Slint needs `<=>` for them.
+- Two-way bindings use `:` in domlet; real Slint needs `<=>` for them.
 - `Image` takes a plain string; real Slint needs `@image-url("...")`.
 - `background` and `border-radius` are accepted on every element; real Slint
   has them only on `Rectangle` (and `background` on `Window`).
@@ -207,15 +207,15 @@ Known differences from real Slint (planned to be closed):
 - `root.` is accepted in front of any value, for example
   `accessible-role: root.text;` or `background: root.red;`; real Slint only
   allows it in front of property names.
-- Some number spellings in lengths differ: `1e3px` is accepted by slint-dom
+- Some number spellings in lengths differ: `1e3px` is accepted by domlet
   but rejected by Slint.
 
 ## 6. Compile errors
 
-slint-dom reports problems while compiling and points at the exact place:
+domlet reports problems while compiling and points at the exact place:
 
 ```text
-error: slint-dom:
+error: domlet:
        *****************************************************************
        ui/main.slint:4:9: `background` requires a color literal without quotes: write `#eef4ff`, not `"#eef4ff"`
          |
@@ -229,12 +229,12 @@ supported alternative.
 
 ## 7. Talking to the device (optional)
 
-Enable the `rpc` feature (`slint-dom = { version = "...", features = ["rpc"] }`)
-for a small JSON-RPC 2.0 client over WebSocket (`slint_dom::rpc::RpcClient`).
+Enable the `rpc` feature (`domlet = { version = "...", features = ["rpc"] }`)
+for a small JSON-RPC 2.0 client over WebSocket (`domlet::rpc::RpcClient`).
 Request identifiers are `rpc::Id` values, either numbers or strings; plain
 numbers and strings convert automatically, for example
 `client.request(7, "command", &params)` or `client.request("a1", ...)`.
-The [`example-server`](https://github.com/nursude355/Slint_Dom/blob/main/example-server/README.md)
+The [`example-server`](https://github.com/nursude355/Domlet/blob/main/example-server/README.md)
 shows a desktop server and a Raspberry Pi Pico 2 + W5500 firmware that serve
 the page and answer calls.
 

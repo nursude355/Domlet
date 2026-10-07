@@ -1,17 +1,20 @@
-# slint-dom
+# domlet
 
-> `slint-dom` is an independent project. It is not affiliated with or
+*We cooked. 🍳 Your `.slint` UI, served as plain DOM straight from the
+compiler.*
+
+> `domlet` is an independent project. It is not affiliated with or
 > endorsed by Slint / SixtyFPS GmbH and contains no Slint code.
 
-`slint-dom` turns a small, web-focused subset of a `.slint` UI into ordinary
-browser DOM elements. slint-dom has its own, independently written `.slint`
+`domlet` turns a small, web-focused subset of a `.slint` UI into ordinary
+browser DOM elements. domlet has its own, independently written `.slint`
 parser (not Slint's). It runs only while compiling and is not included in the
 deployed WebAssembly file.
 
 It is intended for small Rust/WASM control panels, telemetry displays, and
 embedded-device web UIs where a full browser renderer is unnecessary.
 
-## What slint-dom can do
+## What domlet can do
 
 - **Write the UI in `.slint`**, compile it to real HTML elements: `Text`,
   `Button`, `LineEdit`, `CheckBox`, `Slider`, `Image`, `Rectangle`,
@@ -33,7 +36,7 @@ embedded-device web UIs where a full browser renderer is unnecessary.
   files are also compiled with the official Slint compiler in CI; known
   differences are listed in the [guide](docs/guide.md#5-what-is-not-supported).
 
-How to write `.slint` files for slint-dom, what each declaration becomes in
+How to write `.slint` files for domlet, what each declaration becomes in
 Rust, and the full list of supported features: see the
 [guide](docs/guide.md).
 
@@ -89,7 +92,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-slint-dom = "0.2"
+domlet = "0.2"
 wasm-bindgen = "0.2"
 ```
 
@@ -123,7 +126,7 @@ Replace `src/lib.rs`:
 ```rust
 use wasm_bindgen::prelude::*;
 
-slint_dom::include_ui!("ui/main.slint");
+domlet::include_ui!("ui/main.slint");
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -215,7 +218,7 @@ The HTML loads the UI at runtime, so its source file stays small. If the page
 still fails, include the browser Console error and the wasm-pack output when
 reporting the problem.
 
-A runnable copy is in [`test-slint-dom-user/`](test-slint-dom-user/README.md).
+A runnable copy is in [`test-domlet-user/`](test-domlet-user/README.md).
 
 ## Supported `.slint` subset
 
@@ -228,7 +231,7 @@ and `!property` with `enabled` or `visible`. Slint enum values are unquoted:
 write `accessible-role: image;`, not `accessible-role: "image";`.
 
 Properties can be declared as `property`, `in property`, `out property`, or
-`in-out property`; slint-dom generates the same Rust API for all of them
+`in-out property`; domlet generates the same Rust API for all of them
 (`status()`, `set_status()`, `status_property()`). The official Slint
 compiler only exposes `in`, `out`, and `in-out` properties to Rust, so declare
 every property your Rust code uses with one of these if the same `.slint`
@@ -252,7 +255,7 @@ compile-time errors.
 
 ## Optional WebSocket/RPC
 
-Enable `slint-dom = { version = "0.2", features = ["rpc"] }` to use the small
+Enable `domlet = { version = "0.2", features = ["rpc"] }` to use the small
 browser JSON-RPC 2.0 transport. Requests accept numeric or string IDs through
 `rpc::Id`, and incoming messages preserve either form. The complete local
 server and command-line/telemetry example is in
@@ -268,7 +271,7 @@ Run:
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-cargo test -p slint-dom-macros parser::tests
+cargo test -p domlet-macros parser::tests
 wasm-pack build --target web --release --out-dir pkg
 ```
 

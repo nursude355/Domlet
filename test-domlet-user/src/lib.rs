@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
 
-slint_dom::include_ui!("ui/main.slint");
+domlet::include_ui!("ui/main.slint");
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {

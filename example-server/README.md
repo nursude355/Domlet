@@ -59,14 +59,14 @@ Then build the firmware with Rust 1.93 or newer:
 ```powershell
 cargo build --manifest-path example-server/Cargo.toml `
   --no-default-features --features embedded `
-  --bin slint-dom-pico2-w5500 `
+  --bin domlet-pico2-w5500 `
   --target thumbv8m.main-none-eabihf --release --locked
 ```
 
 The ELF firmware is written to:
 
 ```text
-example-server/target/thumbv8m.main-none-eabihf/release/slint-dom-pico2-w5500
+example-server/target/thumbv8m.main-none-eabihf/release/domlet-pico2-w5500
 ```
 
 Flash it with an RP2350-compatible probe/runner. RTT output prints the DHCP

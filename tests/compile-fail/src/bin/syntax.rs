@@ -1,2 +1,2 @@
-slint_dom::include_ui!("ui/syntax.slint");
+domlet::include_ui!("ui/syntax.slint");
 fn main() {}

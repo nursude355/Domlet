@@ -1,13 +1,13 @@
-# slint-dom: runtime and validation contract
+# domlet: runtime and validation contract
 
 For the installation and first-project guide, start with the
 [README](../README.md).
 
-`slint-dom` compiles a focused subset of `.slint` UI descriptions into Rust
+`domlet` compiles a focused subset of `.slint` UI descriptions into Rust
 which creates native browser DOM nodes. Compilation runs in the procedural
 macro crate; parsing and code generation are not part of the deployed WASM.
 
-The application uses `slint_dom::include_ui!("ui/main.slint")` and mounts the
+The application uses `domlet::include_ui!("ui/main.slint")` and mounts the
 generated component with `MainWindow::mount_to_body()`. See the repository's
 `example/` application for a complete UI and callback wiring. Rust 1.81 is the
 declared minimum, and applications target `wasm32-unknown-unknown`.
@@ -108,7 +108,7 @@ The last command compiles every `.slint` file in `tests/ui/` and
 `example/ui/main.slint` with the official Slint compiler (`slint-build`, in a
 separate workspace with its own lockfile) and fails if any of them is not
 valid Slint. `tests/ui/compat.slint` is compiled by both compilers and covers
-the Slint syntax slint-dom accepts (`in`/`out`/`in-out` properties, `root.`
+the Slint syntax domlet accepts (`in`/`out`/`in-out` properties, `root.`
 bindings, length units, and color literals).
 
 The browser suite includes a real generated component, two-way input and
@@ -117,10 +117,10 @@ unmount with externally retained property handles. CI also checks the deployed
 WASM size, separately from the raw compiler artifact. The example enables the
 optional RPC client, so its deployed-package budget is 200 KB.
 
-Release preparation: CI fully verifies `slint-dom-macros`, then packages both
+Release preparation: CI fully verifies `domlet-macros`, then packages both
 workspace crates together with `--no-verify` so the root archive can be
 inspected before the matching macro version exists in the registry. Workspace
-and browser tests validate the local pair. Publish `slint-dom-macros` first,
+and browser tests validate the local pair. Publish `domlet-macros` first,
 wait until that version is available from crates.io, then run `cargo package -p
-slint-dom --locked` for the final independent verification and publish
-`slint-dom`. No publication is performed by the CI workflow.
+domlet --locked` for the final independent verification and publish
+`domlet`. No publication is performed by the CI workflow.

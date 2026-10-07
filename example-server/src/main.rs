@@ -29,7 +29,7 @@ async fn main() {
         .await
         .expect("port 8080 is unavailable");
     let address = "http://127.0.0.1:8080";
-    println!("slint-dom example: {address}");
+    println!("domlet example: {address}");
     if let Err(error) = webbrowser::open(address) {
         eprintln!("could not open browser: {error}; open {address} manually");
     }
@@ -53,7 +53,7 @@ async fn handle_rpc(mut socket: WebSocket) {
         tokio::select! {
             message = socket.recv() => match message {
                 Some(Ok(Message::Text(text))) => {
-                    if let Some(response) = slint_dom_example_server::reply::<1024>(&text) {
+                    if let Some(response) = domlet_example_server::reply::<1024>(&text) {
                         if socket.send(Message::Text(response.as_str().into())).await.is_err() {
                             return;
                         }
@@ -64,7 +64,7 @@ async fn handle_rpc(mut socket: WebSocket) {
             },
             _ = telemetry.tick() => {
                 uptime_seconds += 5;
-                let message = slint_dom_example_server::telemetry::<128>(uptime_seconds);
+                let message = domlet_example_server::telemetry::<128>(uptime_seconds);
                 if socket.send(Message::Text(message.as_str().into())).await.is_err() {
                     return;
                 }

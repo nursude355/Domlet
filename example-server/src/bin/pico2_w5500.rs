@@ -70,7 +70,7 @@ impl ws::WebSocketCallback for RpcSocket {
                 .await?
             {
                 Either::First(Ok(ws::Message::Text(request))) => {
-                    if let Some(response) = slint_dom_example_server::reply::<1024>(request) {
+                    if let Some(response) = domlet_example_server::reply::<1024>(request) {
                         tx.send_text(&response).await?;
                     }
                 }
@@ -83,7 +83,7 @@ impl ws::WebSocketCallback for RpcSocket {
                 Either::First(Err(error)) => break Some((error.code(), "WebSocket error")),
                 Either::Second(()) => {
                     uptime_seconds += 5;
-                    let notification = slint_dom_example_server::telemetry::<128>(uptime_seconds);
+                    let notification = domlet_example_server::telemetry::<128>(uptime_seconds);
                     tx.send_text(&notification).await?;
                 }
             }
@@ -175,17 +175,17 @@ async fn main(spawner: Spawner) {
                     Directory {
                         files: &[
                             (
-                                "slint_dom_example.js",
+                                "domlet_example.js",
                                 File::javascript(include_str!(
-                                    "../../../example/pkg/slint_dom_example.js"
+                                    "../../../example/pkg/domlet_example.js"
                                 )),
                             ),
                             (
-                                "slint_dom_example_bg.wasm",
+                                "domlet_example_bg.wasm",
                                 File::with_content_type(
                                     "application/wasm",
                                     include_bytes!(
-                                        "../../../example/pkg/slint_dom_example_bg.wasm"
+                                        "../../../example/pkg/domlet_example_bg.wasm"
                                     ),
                                 ),
                             ),

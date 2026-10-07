@@ -1,2 +1,2 @@
-slint_dom::include_ui!("ui/binding.slint");
+domlet::include_ui!("ui/binding.slint");
 fn main() {}

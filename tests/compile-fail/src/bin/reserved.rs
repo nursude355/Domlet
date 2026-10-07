@@ -1,2 +1,2 @@
-slint_dom::include_ui!("ui/reserved.slint");
+domlet::include_ui!("ui/reserved.slint");
 fn main() {}

@@ -1,5 +1,5 @@
 [package]
-name = "slint-dom-example-server"
+name = "domlet-example-server"
 version = "0.1.0"
 edition = "2021"
 # The embedded binary uses async closures, stable since 1.85.
@@ -28,12 +28,12 @@ embedded = [
 ]
 
 [[bin]]
-name = "slint-dom-example-server"
+name = "domlet-example-server"
 path = "src/main.rs"
 required-features = ["desktop"]
 
 [[bin]]
-name = "slint-dom-pico2-w5500"
+name = "domlet-pico2-w5500"
 path = "src/bin/pico2_w5500.rs"
 required-features = ["embedded"]
 test = false

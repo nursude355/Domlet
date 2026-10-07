@@ -77,7 +77,7 @@ const CASES: &[Case] = &[
 fn invalid_ui_has_actionable_compiler_errors() {
     let manifest =
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/compile-fail/Cargo.toml");
-    let target = std::env::temp_dir().join("slint-dom-compile-fail-tests");
+    let target = std::env::temp_dir().join("domlet-compile-fail-tests");
     for case in CASES {
         let binary = case.binary;
         let output = std::process::Command::new(env!("CARGO"))

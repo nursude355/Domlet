@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>slint-dom example</title>
+  <title>domlet example</title>
 </head>
 <body>
   <p id="loading" role="status">Loading UI...</p>
@@ -11,7 +11,7 @@
   <script type="module">
     const loading = document.getElementById("loading");
     try {
-      const { default: init } = await import("./pkg/slint_dom_example.js");
+      const { default: init } = await import("./pkg/domlet_example.js");
       await init();
       loading.remove();
     } catch (error) {

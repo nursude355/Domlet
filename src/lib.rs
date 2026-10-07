@@ -14,8 +14,8 @@ pub mod rpc;
 pub use callback::Callback;
 pub use chart::LineChart;
 pub use dom::{DomBuilder, EventBinding};
+pub use domlet_macros::include_ui;
 pub use property::{Property, Subscription, UpdateCycle};
-pub use slint_dom_macros::include_ui;
 
 #[doc(hidden)]
 pub mod __private {

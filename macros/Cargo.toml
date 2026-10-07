@@ -1,7 +1,7 @@
 [package]
-name = "slint-dom-macros"
-description = "Compile-time component generator for slint-dom"
-repository = "https://github.com/nursude355/Slint_Dom"
+name = "domlet-macros"
+description = "Compile-time component generator for domlet"
+repository = "https://github.com/nursude355/Domlet"
 version = "0.2.0"
 edition = "2021"
 license = "MIT"

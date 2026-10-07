@@ -1,2 +1,2 @@
-slint_dom::include_ui!("ui/css.slint");
+domlet::include_ui!("ui/css.slint");
 fn main() {}

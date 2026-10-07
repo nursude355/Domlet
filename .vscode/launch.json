@@ -3,7 +3,7 @@
   "configurations": [
 
     {
-      "name": "Debug slint-dom-macros single test",
+      "name": "Debug domlet-macros single test",
       "type": "lldb",
       "request": "launch",
       "sourceLanguages": ["rust"],
@@ -11,7 +11,7 @@
         "args": [
           "test",
           "-p",
-          "slint-dom-macros",
+          "domlet-macros",
           "--lib",
           "generate::tests::rejects_unsupported_elements"
         ]

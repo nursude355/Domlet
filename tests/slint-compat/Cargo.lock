@@ -1202,7 +1202,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "slint-dom-slint-compat"
+name = "domlet-slint-compat"
 version = "0.0.0"
 dependencies = [
  "slint-build",

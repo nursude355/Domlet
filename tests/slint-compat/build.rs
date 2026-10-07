@@ -1,4 +1,4 @@
-//! Compiles every `.slint` file that slint-dom accepts in its tests and
+//! Compiles every `.slint` file that domlet accepts in its tests and
 //! example with the official Slint compiler. Building this crate fails if any
 //! of them is not valid Slint. The generated Rust code is not used.
 

@@ -218,7 +218,7 @@ impl DomBuilder {
         })
     }
     pub fn install_default_style(&self) -> Result<(), JsValue> {
-        const ID: &str = "slint-dom-style";
+        const ID: &str = "domlet-style";
         if self.document.get_element_by_id(ID).is_some() {
             return Ok(());
         }
@@ -268,14 +268,14 @@ impl Drop for EventBinding {
 }
 
 const DEFAULT_CSS: &str = r#"
-.sd-component { box-sizing: border-box; width: 100%; min-height: 100%; font-family: system-ui, sans-serif; }
-.sd-column, .sd-row, .sd-grid { display: flex; box-sizing: border-box; gap: .5rem; }
-.sd-column { flex-direction: column; }
-.sd-row { flex-direction: row; align-items: center; }
-.sd-grid { display: grid; }
-.sd-button { cursor: pointer; }
-.sd-button:disabled { cursor: default; opacity: .55; }
-.sd-input, .sd-slider, .sd-rectangle { box-sizing: border-box; }
-.sd-image { max-width: 100%; }
-.sd-component[hidden], .sd-component [hidden] { display: none !important; }
+.domlet-component { box-sizing: border-box; width: 100%; min-height: 100%; font-family: system-ui, sans-serif; }
+.domlet-column, .domlet-row, .domlet-grid { display: flex; box-sizing: border-box; gap: .5rem; }
+.domlet-column { flex-direction: column; }
+.domlet-row { flex-direction: row; align-items: center; }
+.domlet-grid { display: grid; }
+.domlet-button { cursor: pointer; }
+.domlet-button:disabled { cursor: default; opacity: .55; }
+.domlet-input, .domlet-slider, .domlet-rectangle { box-sizing: border-box; }
+.domlet-image { max-width: 100%; }
+.domlet-component[hidden], .domlet-component [hidden] { display: none !important; }
 "#;

@@ -1,4 +1,4 @@
-# slint-dom example
+# domlet example
 
 This package demonstrates the supported Slint subset and generated Rust API.
 The UI is defined in [`ui/main.slint`](ui/main.slint), while [`src/lib.rs`](src/lib.rs)

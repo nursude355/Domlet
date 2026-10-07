@@ -1,12 +1,12 @@
 [package]
-name = "slint-dom-slint-compat"
+name = "domlet-slint-compat"
 version = "0.0.0"
 edition = "2021"
 publish = false
-description = "Checks that .slint files accepted by slint-dom also compile with the official Slint compiler"
+description = "Checks that .slint files accepted by domlet also compile with the official Slint compiler"
 
 # Separate workspace and lockfile: the official compiler is a large
-# dependency tree that slint-dom users and the main workspace never build.
+# dependency tree that domlet users and the main workspace never build.
 [workspace]
 
 [build-dependencies]
