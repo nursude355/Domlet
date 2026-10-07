@@ -18,17 +18,32 @@ embedded-device web UIs where a full browser renderer is unnecessary.
 
 - **Write the UI in `.slint`**, compile it to real HTML elements: `Text`,
   `Button`, `LineEdit`, `CheckBox`, `Slider`, `Image`, `Rectangle`,
-  `TouchArea`, vertical and horizontal layouts.
+  `TouchArea`, vertical and horizontal layouts. A `Button` becomes a native
+  `<button>` and a `LineEdit` becomes an `<input>`, rather than a widget drawn
+  inside Slint's WebGL canvas.
+- **Browser-native styling and text**: use CSS and inspect individual widgets
+  with browser developer tools. The browser renders the text and controls;
+  Slint's documented browser backend draws them itself rather than using
+  DOM widgets and CSS.
 - **Use it from Rust**: `include_ui!` generates a typed component with getters,
   setters, observable properties, and callback handlers.
 - **Two-way bindings** for text inputs, checkboxes, and sliders; `visible` and
   `enabled` bindings, including `!property`.
 - **Sizes, colors, and accessibility**: Slint length units, hex colors,
-  screen-reader labels, roles, and live regions.
+  screen-reader labels, roles, and live regions on real HTML elements.
+  domlet builds on native HTML semantics and ARIA; Slint currently documents
+  screen-reader accessibility as unavailable in its browser backend.
 - **Located compile errors**: unsupported input is rejected with file, line,
   and column.
 - **Small output**: the parser runs only at compile time; the example UI ships
-  as roughly 150 KB of WebAssembly.
+  as roughly 160 kB of WebAssembly (WASM module only). Slint's browser build
+  includes its widget renderer; domlet uses the browser's built-in rendering
+  instead, keeping that drawing engine out of your application payload. In our
+  measurement (October 2026), the same `example/ui/main.slint` built with
+  Slint 1.18.1 for the browser was about 3.2 MB (1.3 MB gzip, after
+  `wasm-opt -Oz`), compared with about 160 kB (63 kB gzip, without `wasm-opt`)
+  for domlet's whole example, including its chart and RPC client. Both used
+  the same release profile (`opt-level = "z"`, LTO).
 - **Optional WebSocket/JSON-RPC client** for talking to a device, a lightweight
   SVG line chart, and example servers for the desktop (Axum) and a Raspberry
   Pi Pico 2 + W5500 (`no_std`, no heap).
@@ -39,6 +54,9 @@ embedded-device web UIs where a full browser renderer is unnecessary.
 How to write `.slint` files for domlet, what each declaration becomes in
 Rust, and the full list of supported features: see the
 [guide](docs/guide.md).
+
+The Slint comparisons above refer specifically to its Rust/WASM browser
+backend, as described in [Slint's official web-platform documentation](https://docs.slint.dev/latest/docs/slint/guide/platforms/web/).
 
 ## Planned
 
