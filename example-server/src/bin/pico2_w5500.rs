@@ -6,6 +6,9 @@
 #![no_std]
 #![no_main]
 #![recursion_limit = "512"]
+// picoserve hashes the embedded files at compile time (ETag); for the ~159 KB
+// WASM file this exceeds rustc's default const-eval step limit.
+#![allow(long_running_const_eval)]
 
 use core::{convert::Infallible, future::poll_fn, future::Future, pin::pin, task::Poll};
 use defmt::{info, unwrap};
