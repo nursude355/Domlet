@@ -2,7 +2,7 @@
 name = "domlet-macros"
 description = "Compile-time component generator for domlet"
 repository = "https://github.com/nursude355/Domlet"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.81"

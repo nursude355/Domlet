@@ -1,6 +1,6 @@
 This is the root README quick start as a runnable consumer. It uses the local
 crate so CI tests changes before publication. For a registry-only reproduction,
-replace the path dependency with `domlet = "0.2"`.
+replace the path dependency with `domlet = "0.3"`.
 
 From the repository root:
 

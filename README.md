@@ -92,7 +92,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-domlet = "0.2"
+domlet = "0.3"
 wasm-bindgen = "0.2"
 ```
 
@@ -255,7 +255,7 @@ compile-time errors.
 
 ## Optional WebSocket/RPC
 
-Enable `domlet = { version = "0.2", features = ["rpc"] }` to use the small
+Enable `domlet = { version = "0.3", features = ["rpc"] }` to use the small
 browser JSON-RPC 2.0 transport. Requests accept numeric or string IDs through
 `rpc::Id`, and incoming messages preserve either form. The complete local
 server and command-line/telemetry example is in
