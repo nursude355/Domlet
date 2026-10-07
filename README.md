@@ -1,4 +1,4 @@
-# domlet
+# Domlet
 
 *We cooked. 🍳 Your `.slint` UI, served as plain DOM straight from the
 compiler.*
