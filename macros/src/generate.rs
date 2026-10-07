@@ -1067,7 +1067,7 @@ mod tests {
     #[test]
     fn expected_failed() {
         let input_result = parser::parse("property <string> status: \"Ready\";   export component App { Text { text: status; } }");
-        println! {"------------------ Input: {input_result:?}"};
+        println!("------------------ Input: {input_result:?}");
         let input = input_result.err().unwrap();
         println!("------------------ Error: {input:?}");
         let m = format!("{input:?}");
@@ -1082,7 +1082,7 @@ mod tests {
         let input_result = parser::parse(
             "export component App { property <string> status: \"Ready\"; Text { text: status; } }",
         );
-        println! {"------------------ Input: {input_result:?}"};
+        println!("------------------ Input: {input_result:?}");
         let input = input_result.unwrap();
         let r = component(
             &input,
