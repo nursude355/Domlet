@@ -3,7 +3,22 @@
 //! [`include_ui!`] reads a `.slint` file at compile time and generates a Rust
 //! component which creates ordinary DOM nodes. The parser is never linked into
 //! the WebAssembly binary.
-
+//!
+//! The crate is intended for small Rust/WASM control panels, telemetry
+//! displays, and embedded-device web UIs that can run complex code (such as
+//! generating statistics or charts, coded in Rust) in the browser, and want
+//! to use the `.slint` language for the UI layout and styling without the full
+//! official Slint compilation. It generates DOM widgets instead of rendering
+//! widgets in WASM, which drastically reduces the size of the WASM binary.
+//!
+//! A WASM example shows how to use the crate to create a simple line chart and
+//! some widgets with a `.slint` UI.
+//!
+//! A server example provides a web server application that the WASM example
+//! can connect to. It shows sending unsolicited messages in both directions
+//! over WebSockets using an RPC protocol. The server example can be compiled
+//! for a desktop development computer as well as for a Raspberry Pi Pico 2
+//! with the W5500 Ethernet module, and run on the device.
 mod callback;
 mod chart;
 mod dom;
