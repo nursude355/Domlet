@@ -15,6 +15,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "domlet"
+version = "0.3.0"
+dependencies = [
+ "domlet-macros",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "domlet-invalid-consumer"
+version = "0.0.0"
+dependencies = [
+ "domlet",
+]
+
+[[package]]
+name = "domlet-macros"
+version = "0.3.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -90,31 +115,6 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
-
-[[package]]
-name = "slint-dom"
-version = "0.2.0"
-dependencies = [
- "slint-dom-macros",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "slint-dom-invalid-consumer"
-version = "0.0.0"
-dependencies = [
- "slint-dom",
-]
-
-[[package]]
-name = "slint-dom-macros"
-version = "0.2.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "syn"

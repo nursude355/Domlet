@@ -1,5 +1,5 @@
 [package]
-name = "slint-dom-invalid-consumer"
+name = "domlet-invalid-consumer"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -7,4 +7,4 @@ publish = false
 [workspace]
 
 [dependencies]
-slint-dom = { path = "../.." }
+domlet = { path = "../.." }

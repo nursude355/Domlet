@@ -2,6 +2,8 @@
 pub enum Token {
     Ident(String),
     String(String),
+    /// A color literal such as `#1a2b3c`, written without quotes.
+    Color(String),
     Number(String),
     Symbol(char),
     Arrow,
@@ -70,6 +72,14 @@ pub(crate) fn lex_spanned(source: &str) -> Result<Vec<SpannedToken>, LexError> {
                             offset: at,
                         });
                     }
+                    if chars[at] == '{' {
+                        return Err(LexError {
+                            message: "string interpolation `\\{...}` is not supported; \
+                                      build the text in Rust and bind a string property"
+                                .into(),
+                            offset: at - 1,
+                        });
+                    }
                     value.push(match chars[at] {
                         'n' => '\n',
                         'r' => '\r',
@@ -103,7 +113,7 @@ pub(crate) fn lex_spanned(source: &str) -> Result<Vec<SpannedToken>, LexError> {
                     offset: start,
                 });
             }
-            tokens.push((Token::String(chars[start..at].iter().collect()), start));
+            tokens.push((Token::Color(chars[start..at].iter().collect()), start));
             continue;
         }
         if chars[at].is_ascii_alphabetic() || chars[at] == '_' {
@@ -154,6 +164,23 @@ mod tests {
         assert!(tokens.contains(&Token::String("a\n".into())));
         assert!(lex("background: #1a2B3c;")
             .unwrap()
-            .contains(&Token::String("#1a2B3c".into())));
+            .contains(&Token::Color("#1a2B3c".into())));
+    }
+
+    #[test]
+    fn rejects_string_interpolation_at_the_backslash() {
+        let source = "text: \"Count: \\{count}\";";
+        let error = lex_spanned(source).unwrap_err();
+        assert!(
+            error.message.contains("string interpolation"),
+            "{}",
+            error.message
+        );
+        assert_eq!(error.offset, source.find('\\').unwrap());
+        // An escaped backslash before `{` is plain text, not interpolation.
+        assert_eq!(
+            lex("\"a\\\\{b}\"").unwrap()[0],
+            Token::String("a\\{b}".into())
+        );
     }
 }

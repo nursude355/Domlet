@@ -1,10 +1,10 @@
 [package]
-name = "slint-dom-example"
+name = "domlet-example"
 version = "0.1.0"
 edition = "2021"
 license-file = "../LICENSE-MIT"
-description = "Interactive browser example for slint-dom"
-repository = "https://github.com/nursude355/Slint_Dom"
+description = "Interactive browser example for domlet"
+repository = "https://github.com/nursude355/Domlet"
 rust-version = "1.81"
 publish = false
 
@@ -15,6 +15,6 @@ wasm-opt = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-slint-dom = { path = "..", features = ["rpc"] }
+domlet = { path = "..", features = ["rpc"] }
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = ["Window", "Document", "Element", "HtmlElement", "Location"] }

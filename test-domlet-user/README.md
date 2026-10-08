@@ -1,12 +1,12 @@
 This is the root README quick start as a runnable consumer. It uses the local
 crate so CI tests changes before publication. For a registry-only reproduction,
-replace the path dependency with `slint-dom = "0.1"`.
+replace the path dependency with `domlet = "0.3"`.
 
 From the repository root:
 
 ```sh
-wasm-pack build test-slint-dom-user --target web --release --out-dir pkg --out-name app
-python -m http.server 8000 --directory test-slint-dom-user
+wasm-pack build test-domlet-user --target web --release --out-dir pkg --out-name app
+python -m http.server 8000 --directory test-domlet-user
 ```
 
 Open http://localhost:8000. The page should show Ready and a Start button.

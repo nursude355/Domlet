@@ -25,10 +25,16 @@ jobs:
           workspaces: |
             . -> target
             example-server -> target
+            tests/slint-compat -> target
       - name: Run workspace tests
         run: cargo test --workspace --all-features --locked
       - name: Test desktop example server
         run: cargo test --manifest-path example-server/Cargo.toml --locked
+      # Every .slint file in tests/ui/ and example/ui/main.slint must also be
+      # valid for the official Slint compiler (slint-build). Separate
+      # workspace and lockfile; a cold build took about 80 s locally.
+      - name: Compile shared .slint files with the official Slint compiler
+        run: cargo build --manifest-path tests/slint-compat/Cargo.toml --locked
 
   msrv:
     name: MSRV (Windows)
@@ -48,7 +54,7 @@ jobs:
       - name: Check workspace with Rust 1.81
         run: cargo check --workspace --locked
       - name: Check WebAssembly example with Rust 1.81
-        run: cargo check -p slint-dom-example --target wasm32-unknown-unknown --locked
+        run: cargo check -p domlet-example --target wasm32-unknown-unknown --locked
   check:
     name: Checks (Windows)
     runs-on: windows-latest
@@ -82,14 +88,14 @@ jobs:
         run: cargo check --manifest-path example-server/Cargo.toml --locked
       - name: Validate crates.io package archives
         run: |
-          cargo package -p slint-dom-macros --locked
+          cargo package -p domlet-macros --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Package both workspace crates in one invocation so Cargo can build
           # the root archive before the matching macro version is published.
           # Workspace tests above validate the local pair together.
-          cargo package -p slint-dom-macros -p slint-dom --locked --no-verify
+          cargo package -p domlet-macros -p domlet --locked --no-verify
       - name: Check WebAssembly example
-        run: cargo check -p slint-dom-example --target wasm32-unknown-unknown --locked
+        run: cargo check -p domlet-example --target wasm32-unknown-unknown --locked
       - name: Run browser tests
         # ChromeDriver can start slowly on Windows runners; the runner's
         # default wait fails with "driver failed to bind port during startup".
@@ -99,14 +105,14 @@ jobs:
       - name: Build the README quick-start consumer
         shell: pwsh
         run: |
-          wasm-pack build test-slint-dom-user --target web --release --out-dir pkg --out-name app --locked
+          wasm-pack build test-domlet-user --target web --release --out-dir pkg --out-name app --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($file in @('test-slint-dom-user/pkg/app.js', 'test-slint-dom-user/pkg/app_bg.wasm')) {
+          foreach ($file in @('test-domlet-user/pkg/app.js', 'test-domlet-user/pkg/app_bg.wasm')) {
             if ((Get-Item -LiteralPath $file -ErrorAction Stop).Length -eq 0) {
               throw "Empty browser asset: $file"
             }
           }
-          if (-not (Select-String -LiteralPath test-slint-dom-user/index.html -SimpleMatch '"./pkg/app.js"' -Quiet)) {
+          if (-not (Select-String -LiteralPath test-domlet-user/index.html -SimpleMatch '"./pkg/app.js"' -Quiet)) {
             throw 'HTML loader does not reference pkg/app.js'
           }
       # Checked before the raw budget so the size users actually download is
@@ -116,20 +122,20 @@ jobs:
         run: |
           wasm-pack build example --target web --release --out-dir pkg --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $bytes = (Get-Item -LiteralPath example/pkg/slint_dom_example_bg.wasm -ErrorAction Stop).Length
+          $bytes = (Get-Item -LiteralPath example/pkg/domlet_example_bg.wasm -ErrorAction Stop).Length
           Write-Host "Deployed example WASM: $bytes bytes"
           # The example deliberately enables the optional JSON-RPC client.
           # Keep a meaningful deployed-package limit without rejecting it.
           if ($bytes -eq 0 -or $bytes -gt 200000) { throw 'Deployed WASM size budget failed' }
-          if ((Get-Item -LiteralPath example/pkg/slint_dom_example.js -ErrorAction Stop).Length -eq 0) {
+          if ((Get-Item -LiteralPath example/pkg/domlet_example.js -ErrorAction Stop).Length -eq 0) {
             throw 'Empty JavaScript loader'
           }
       - name: Enforce example WASM size budget
         shell: pwsh
         run: |
-          cargo build -p slint-dom-example --release --target wasm32-unknown-unknown --locked
+          cargo build -p domlet-example --release --target wasm32-unknown-unknown --locked
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $bytes = (Get-Item -LiteralPath target/wasm32-unknown-unknown/release/slint_dom_example.wasm -ErrorAction Stop).Length
+          $bytes = (Get-Item -LiteralPath target/wasm32-unknown-unknown/release/domlet_example.wasm -ErrorAction Stop).Length
           Write-Host "Raw example WASM: $bytes bytes"
           # The raw compiler output still carries wasm-bindgen metadata that
           # wasm-pack strips; the deployed check above is what users download.
@@ -139,5 +145,5 @@ jobs:
         run: >-
           cargo build --manifest-path example-server/Cargo.toml
           --no-default-features --features embedded
-          --bin slint-dom-pico2-w5500
+          --bin domlet-pico2-w5500
           --target thumbv8m.main-none-eabihf --release --locked

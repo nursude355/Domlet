@@ -52,13 +52,13 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
         let ty = rust_type(property.kind);
         let initial = at(property.offset, literal(&property.initial, property.kind))?;
         property_types.insert(property.name.clone(), property.kind);
-        fields.push(quote!(#name: ::slint_dom::Property<#ty>));
-        initializers.push(quote!(let #name = ::slint_dom::Property::new(#initial);));
+        fields.push(quote!(#name: ::domlet::Property<#ty>));
+        initializers.push(quote!(let #name = ::domlet::Property::new(#initial);));
         constructors.push(quote!(#name));
         methods.push(quote! {
             pub fn #name(&self) -> #ty { self.#name.get() }
-            pub fn #setter(&self, value: #ty) { self.#name.set(value); }
-            pub fn #property_handle(&self) -> ::slint_dom::Property<#ty> { self.#name.clone() }
+            pub fn #setter(&self, value: #ty) { self.#name.set_if_changed(value); }
+            pub fn #property_handle(&self) -> ::domlet::Property<#ty> { self.#name.clone() }
         });
     }
 
@@ -67,8 +67,8 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
         let name = at(callback.offset, rust_ident(&callback.name))?;
         let on_name = format_ident!("on_{}", normalized(&callback.name));
         callback_names.insert(callback.name.clone());
-        fields.push(quote!(#name: ::slint_dom::Callback));
-        initializers.push(quote!(let #name = ::slint_dom::Callback::default();));
+        fields.push(quote!(#name: ::domlet::Callback));
+        initializers.push(quote!(let #name = ::domlet::Callback::default();));
         constructors.push(quote!(#name));
         methods.push(quote! {
             pub fn #on_name(&self, handler: impl FnMut() + 'static) { self.#name.set(handler); }
@@ -79,10 +79,10 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
     collect_ids(&component.children, &mut ids);
     for (id, offset) in &ids {
         let name = at(*offset, rust_ident(id))?;
-        fields.push(quote!(#name: ::slint_dom::__private::Element));
+        fields.push(quote!(#name: ::domlet::__private::Element));
         constructors.push(quote!(#name));
         methods.push(quote! {
-            pub fn #name(&self) -> &::slint_dom::__private::Element { &self.#name }
+            pub fn #name(&self) -> &::domlet::__private::Element { &self.#name }
         });
     }
 
@@ -104,34 +104,37 @@ pub fn component(component: &Component, source_path: &LitStr) -> GenerationResul
         const _: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", #source_path));
 
         pub struct #component_name {
-            root: ::slint_dom::__private::Element,
+            root: ::domlet::__private::Element,
             #(#fields,)*
-            _events: ::std::vec::Vec<::slint_dom::EventBinding>,
-            _subscriptions: ::std::vec::Vec<::slint_dom::Subscription>,
+            _events: ::std::vec::Vec<::domlet::EventBinding>,
+            _subscriptions: ::std::vec::Vec<::domlet::Subscription>,
         }
 
         impl #component_name {
-            pub fn mount(parent: &::slint_dom::__private::Element) -> Result<Self, ::slint_dom::__private::JsValue> {
-                let dom = ::slint_dom::DomBuilder::from_browser()?;
+            pub fn mount(parent: &::domlet::__private::Element) -> Result<Self, ::domlet::__private::JsValue> {
+                let dom = ::domlet::DomBuilder::from_browser()?;
                 dom.install_default_style()?;
                 #title
                 #(#initializers)*
                 let mut events = ::std::vec::Vec::new();
                 let mut subscriptions = ::std::vec::Vec::new();
-                let root = dom.element(#root_tag, "sd-component")?;
+                let root = dom.element(#root_tag, "domlet-component")?;
                 #nodes
                 dom.append(parent, &root)?;
                 Ok(Self { root, #(#constructors,)* _events: events, _subscriptions: subscriptions })
             }
 
-            pub fn mount_to_body() -> Result<Self, ::slint_dom::__private::JsValue> {
-                let dom = ::slint_dom::DomBuilder::from_browser()?;
+            pub fn mount_to_body() -> Result<Self, ::domlet::__private::JsValue> {
+                let dom = ::domlet::DomBuilder::from_browser()?;
                 let body = dom.body()?;
                 Self::mount(&body)
             }
 
-            pub fn root(&self) -> &::slint_dom::__private::Element { &self.root }
+            pub fn root(&self) -> &::domlet::__private::Element { &self.root }
             pub fn unmount(self) { self.root.remove(); }
+            /// Keeps this component and its event bindings alive for the
+            /// remaining lifetime of the page.
+            pub fn keep_alive(self) { ::std::mem::forget(self); }
             #(#methods)*
         }
     })
@@ -148,13 +151,10 @@ fn emit_nodes(
     for node in nodes {
         let index = *sequence;
         *sequence += 1;
-        let variable = node
-            .id
-            .as_ref()
-            .map(|id| rust_ident(id))
-            .transpose()
-            .map_err(|message| GenerationError::new(node.offset, message))?
-            .unwrap_or_else(|| format_ident!("__node_{index}"));
+        let variable = match &node.id {
+            Some(id) => at(id.offset, rust_ident(&id.name))?,
+            None => format_ident!("__node_{index}"),
+        };
         let spec = at(node.offset, widget(&node.kind))?;
         if matches!(spec.tag, "input" | "img") && !node.children.is_empty() {
             return Err(GenerationError::new(
@@ -352,11 +352,20 @@ fn emit_property(
             },
             value,
         ),
+        "background" => {
+            let value = css_color(value)?;
+            Ok(quote!(dom.style(&#variable, "background", #value)?;))
+        }
         "width" | "height" | "min-width" | "min-height" | "max-width" | "max-height"
-        | "padding" | "spacing" | "background" | "border-radius" => {
+        | "padding" | "spacing" | "border-radius" => {
             let css_name = if name == "spacing" { "gap" } else { name };
-            let value = static_value(value)?;
-            validate_css_value(css_name, &value)?;
+            let Value::Number(length) = value else {
+                return Err(format!(
+                    "`{name}` requires a length literal such as `12px`, without quotes; {}",
+                    supported_length_units(name)
+                ));
+            };
+            let value = css_length(name, length)?;
             Ok(quote!(dom.style(&#variable, #css_name, #value)?;))
         }
         _ => Err(format!("unsupported property `{name}`")),
@@ -457,47 +466,85 @@ fn scalar_attribute(
     Ok(quote!(dom.attribute(&#variable, #attribute, #value)?;))
 }
 
-fn validate_css_value(name: &str, value: &str) -> Result<(), String> {
-    if name == "background" {
-        if let Some(digits) = value.strip_prefix('#') {
-            if !matches!(digits.len(), 3 | 4 | 6 | 8)
-                || !digits.chars().all(|c| c.is_ascii_hexdigit())
-            {
-                return Err(format!("invalid CSS color `{value}`"));
+/// Named colors accepted besides hex literals; Slint and CSS agree on them.
+const NAMED_COLORS: &[&str] = &["transparent", "black", "white", "red", "green", "blue"];
+
+/// Slint color literals: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, or a named
+/// color, all without quotes. CSS reads them the same way.
+fn css_color(value: &Value) -> Result<String, String> {
+    match value {
+        Value::Color(color) => {
+            let digits = &color[1..];
+            if matches!(digits.len(), 3 | 4 | 6 | 8) {
+                Ok(color.clone())
+            } else {
+                Err(format!(
+                    "invalid color `{color}`; use #rgb, #rgba, #rrggbb, or #rrggbbaa"
+                ))
             }
         }
-        if value.starts_with('#')
-            || matches!(
-                value,
-                "transparent" | "black" | "white" | "red" | "green" | "blue"
-            )
-        {
-            return Ok(());
+        Value::Identifier(name) if NAMED_COLORS.contains(&name.as_str()) => Ok(name.clone()),
+        Value::String(text) => {
+            Err(format!(
+            "`background` requires a color literal without quotes: write `{}`, not `\"{text}\"`",
+            if text.starts_with('#') { text.as_str() } else { "#rrggbb" }
+        ))
         }
-        return Err(format!("unsupported background `{value}`; use a hex color"));
+        Value::Identifier(name) | Value::NotIdentifier(name) => Err(format!(
+            "unsupported background `{name}`; use a hex color such as `#eef4ff` or one of: {}",
+            NAMED_COLORS.join(", ")
+        )),
+        _ => Err("`background` requires a hex color such as `#eef4ff`".into()),
     }
+}
+
+/// Slint length units and their CSS output. CSS and Slint define `cm`,
+/// `mm`, `in`, and `pt` with the same factors (1in = 96px). `phx` (physical
+/// pixels) is emitted as CSS `px`, which equals it only at a device pixel
+/// ratio of 1. Slint's `rem` is based on the window's default font size and
+/// CSS `rem` on the root font size.
+const LENGTH_UNITS: &[(&str, &str)] = &[
+    ("phx", "px"),
+    ("px", "px"),
+    ("rem", "rem"),
+    ("cm", "cm"),
+    ("mm", "mm"),
+    ("in", "in"),
+    ("pt", "pt"),
+    ("%", "%"),
+];
+
+/// Slint converts percentages to lengths only for these properties.
+fn accepts_percent(name: &str) -> bool {
+    matches!(name, "width" | "height")
+}
+
+fn supported_length_units(name: &str) -> String {
+    let percent = if accepts_percent(name) { ", %" } else { "" };
+    format!("supported units: px, phx, rem, cm, mm, in, pt{percent}, or unitless 0")
+}
+
+fn css_length(name: &str, value: &str) -> Result<String, String> {
     if value == "0" {
-        return Ok(());
+        return Ok("0".into());
     }
-    for unit in ["px", "rem", "em", "%", "vh", "vw"] {
-        if value.strip_suffix(unit).is_some_and(|number| {
-            number
+    for (unit, css_unit) in LENGTH_UNITS {
+        if *unit == "%" && !accepts_percent(name) {
+            continue;
+        }
+        if let Some(number) = value.strip_suffix(unit) {
+            if number
                 .parse::<f64>()
                 .is_ok_and(|value| value.is_finite() && value >= 0.0)
-        }) {
-            return Ok(());
+            {
+                return Ok(format!("{number}{css_unit}"));
+            }
         }
     }
-    Err(format!("invalid CSS size `{value}` for `{name}`"))
-}
-fn static_value(value: &Value) -> Result<String, String> {
-    match value {
-        Value::String(v) | Value::Number(v) => Ok(v.clone()),
-        Value::Bool(v) => Ok(v.to_string()),
-        Value::Identifier(v) | Value::NotIdentifier(v) => Err(format!(
-            "dynamic binding `{v}` is not supported for this property"
-        )),
-    }
+    Err(format!(
+        "invalid CSS size `{value}` for `{name}`; {}",
+        supported_length_units(name)
+    ))
 }
 
 fn require_binding(
@@ -529,7 +576,7 @@ fn validate(component: &Component) -> GenerationResult<()> {
     .into_iter()
     .map(str::to_owned)
     .collect();
-    let mut methods: HashSet<String> = ["mount", "mount_to_body", "root", "unmount"]
+    let mut methods: HashSet<String> = ["mount", "mount_to_body", "root", "unmount", "keep_alive"]
         .into_iter()
         .map(str::to_owned)
         .collect();
@@ -586,7 +633,7 @@ fn validate(component: &Component) -> GenerationResult<()> {
 fn collect_ids<'a>(elements: &'a [Element], output: &mut Vec<(&'a str, usize)>) {
     for element in elements {
         if let Some(id) = &element.id {
-            output.push((id, element.offset));
+            output.push((&id.name, id.offset));
         }
         collect_ids(&element.children, output);
     }
@@ -657,67 +704,67 @@ fn widget(kind: &str) -> Result<Widget, String> {
     let result = match kind {
         "VerticalLayout" => Widget {
             tag: "div",
-            class: "sd-column",
+            class: "domlet-column",
             input_type: None,
             properties: &["padding", "spacing"],
         },
         "HorizontalLayout" => Widget {
             tag: "div",
-            class: "sd-row",
+            class: "domlet-row",
             input_type: None,
             properties: &["padding", "spacing"],
         },
         "GridLayout" => Widget {
             tag: "div",
-            class: "sd-grid",
+            class: "domlet-grid",
             input_type: None,
             properties: &["padding", "spacing"],
         },
         "Text" => Widget {
             tag: "span",
-            class: "sd-text",
+            class: "domlet-text",
             input_type: None,
             properties: &["text"],
         },
         "Button" => Widget {
             tag: "button",
-            class: "sd-button",
+            class: "domlet-button",
             input_type: Some("button"),
             properties: &["text"],
         },
         "LineEdit" | "TextInput" => Widget {
             tag: "input",
-            class: "sd-input",
+            class: "domlet-input",
             input_type: Some("text"),
             properties: &["text", "placeholder-text"],
         },
         "CheckBox" => Widget {
             tag: "input",
-            class: "sd-checkbox",
+            class: "domlet-checkbox",
             input_type: Some("checkbox"),
             properties: &["checked"],
         },
         "Slider" => Widget {
             tag: "input",
-            class: "sd-slider",
+            class: "domlet-slider",
             input_type: Some("range"),
             properties: &["value", "minimum", "maximum", "step"],
         },
         "Image" => Widget {
             tag: "img",
-            class: "sd-image",
+            class: "domlet-image",
             input_type: None,
             properties: &["source"],
         },
         "Rectangle" => Widget {
             tag: "div",
-            class: "sd-rectangle",
+            class: "domlet-rectangle",
             input_type: None,
             properties: &[],
         },
         "TouchArea" => Widget {
             tag: "button",
-            class: "sd-touch",
+            class: "domlet-touch",
             input_type: Some("button"),
             properties: &[],
         },
@@ -742,7 +789,14 @@ mod tests {
     use crate::parser;
     #[test]
     fn rejects_internal_names_and_invalid_css() {
-        for name in ["dom", "events", "subscriptions", "parent", "__node_0"] {
+        for name in [
+            "dom",
+            "events",
+            "subscriptions",
+            "parent",
+            "keep_alive",
+            "__node_0",
+        ] {
             let source = format!("export component App {{ property <bool> {name}: true; }}");
             let input = parser::parse(&source).unwrap();
             assert!(
@@ -755,7 +809,7 @@ mod tests {
             );
         }
         for value in ["12", "NaNpx", "-2px", "12oops"] {
-            assert!(validate_css_value("width", value).is_err(), "{value}");
+            assert!(css_length("width", value).is_err(), "{value}");
         }
     }
     #[test]
@@ -771,6 +825,7 @@ mod tests {
             output.contains("set_enabled")
                 && output.contains("on_go")
                 && output.contains("bind_enabled")
+                && output.contains("keep_alive")
                 && output.contains("dom . listen")
         );
     }
@@ -789,10 +844,131 @@ mod tests {
     }
 
     #[test]
+    fn element_id_errors_point_at_the_id() {
+        for (source, id) in [
+            (
+                "export component App { property <bool> status; status := Text {} }",
+                "status :=",
+            ),
+            ("export component App { dom := Text {} }", "dom :="),
+            (
+                "export component App { Rectangle { __node_0 := Text {} } }",
+                "__node_0",
+            ),
+        ] {
+            let input = parser::parse(source).unwrap();
+            let error = component(
+                &input,
+                &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+            )
+            .unwrap_err();
+            assert_eq!(error.offset, source.find(id).unwrap(), "{source}: {error}");
+        }
+    }
+
+    #[test]
+    fn property_qualifiers_generate_the_same_api() {
+        let input = parser::parse(
+            "export component App { in property <bool> a; out property <bool> b; in-out property <bool> c; property <bool> d; Text { visible: root.a; } }",
+        )
+        .unwrap();
+        let output = component(
+            &input,
+            &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+        )
+        .unwrap()
+        .to_string();
+        for name in ["a", "b", "c", "d"] {
+            for method in [
+                format!("pub fn {name} (& self)"),
+                format!("pub fn set_{name} (& self"),
+                format!("pub fn {name}_property (& self)"),
+            ] {
+                assert!(output.contains(&method), "{method}: {output}");
+            }
+        }
+        assert!(
+            output.contains("bind_visible (& __node_0 , & a)"),
+            "{output}"
+        );
+    }
+
+    #[test]
     fn validates_css_sizes_and_colors() {
-        assert!(validate_css_value("width", "12px").is_ok());
-        assert!(validate_css_value("width", "12oops").is_err());
-        assert!(validate_css_value("background", "#12xx00").is_err());
+        assert_eq!(css_length("width", "12px").unwrap(), "12px");
+        assert!(css_length("width", "12oops").is_err());
+        assert!(css_color(&Value::Color("#12345".into())).is_err());
+        assert_eq!(
+            css_color(&Value::Color("#eef4ff".into())).unwrap(),
+            "#eef4ff"
+        );
+        assert_eq!(css_color(&Value::Identifier("red".into())).unwrap(), "red");
+    }
+
+    #[test]
+    fn accepts_slint_length_units() {
+        for (value, css) in [
+            ("0", "0"),
+            ("12px", "12px"),
+            ("2phx", "2px"),
+            ("1.5rem", "1.5rem"),
+            ("1cm", "1cm"),
+            ("4mm", "4mm"),
+            ("1in", "1in"),
+            ("9pt", "9pt"),
+            ("50%", "50%"),
+        ] {
+            assert_eq!(css_length("width", value).unwrap(), css, "{value}");
+        }
+    }
+
+    #[test]
+    fn rejects_css_only_units_naming_the_supported_ones() {
+        for value in ["1em", "10vh", "10vw"] {
+            let error = css_length("height", value).unwrap_err();
+            assert!(
+                error.contains("supported units: px, phx, rem, cm, mm, in, pt, %, or unitless 0"),
+                "{error}"
+            );
+        }
+        // Slint converts percentages to lengths only for `width` and `height`.
+        let error = css_length("padding", "10%").unwrap_err();
+        assert!(error.contains("pt, or unitless 0"), "{error}");
+    }
+
+    #[test]
+    fn rejects_quoted_colors_and_lengths() {
+        for (source, message) in [
+            (
+                "export component App { Rectangle { background: \"#fff\"; } }",
+                "write `#fff`, not `\"#fff\"`",
+            ),
+            (
+                "export component App { Rectangle { background: \"red\"; } }",
+                "color literal without quotes",
+            ),
+            (
+                "export component App { Rectangle { width: \"12px\"; } }",
+                "without quotes",
+            ),
+            (
+                "export component App { property <string> c: #fff; }",
+                "does not match its type",
+            ),
+        ] {
+            let error = match parser::parse(source) {
+                Ok(input) => {
+                    component(
+                        &input,
+                        &LitStr::new("ui.slint", proc_macro2::Span::call_site()),
+                    )
+                    .unwrap_err()
+                    .message
+                }
+                Err(error) => error.message,
+            };
+            assert!(error.contains(message), "{source}: {error}");
+        }
     }
 
     #[test]
@@ -918,7 +1094,7 @@ mod tests {
         let rt = r.unwrap().to_string();
         println!("------------------ Result String: {rt}");
 
-        assert!(rt.contains("let status = :: slint_dom :: Property :: new (:: std :: string :: String :: from (\"Ready\")) ;"));
+        assert!(rt.contains("let status = :: domlet :: Property :: new (:: std :: string :: String :: from (\"Ready\")) ;"));
     }
 
     #[test]

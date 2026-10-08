@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 
-slint_dom::include_ui!("ui/main.slint");
+domlet::include_ui!("ui/main.slint");
 
 thread_local! {
     static APP: RefCell<Option<RunningApp>> = const { RefCell::new(None) };
@@ -9,15 +9,15 @@ thread_local! {
 
 struct RunningApp {
     _app: MainWindow,
-    _chart: Rc<slint_dom::LineChart>,
-    _chart_subscription: slint_dom::Subscription,
-    _rpc: Option<Rc<slint_dom::rpc::RpcClient>>,
+    _chart: Rc<domlet::LineChart>,
+    _chart_subscription: domlet::Subscription,
+    _rpc: Option<Rc<domlet::rpc::RpcClient>>,
 }
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
     let app = MainWindow::mount_to_body()?;
-    let chart = Rc::new(slint_dom::LineChart::mount(app.graph())?);
+    let chart = Rc::new(domlet::LineChart::mount(app.graph())?);
     let chart_target = chart.clone();
     let chart_subscription = app.progress_property().observe(move |value| {
         let baseline = *value;
@@ -74,7 +74,8 @@ pub fn start() -> Result<(), JsValue> {
                 return;
             }
             next_id += 1;
-            if let Err(error) = rpc.request(next_id, "command", &command.get()) {
+            let request_id = domlet::rpc::Id::Number(next_id);
+            if let Err(error) = rpc.request(request_id, "command", &command.get()) {
                 status.set(format!("RPC send failed: {error:?}"));
             }
         });
@@ -94,7 +95,7 @@ pub fn start() -> Result<(), JsValue> {
     Ok(())
 }
 
-fn connect_rpc() -> Option<Rc<slint_dom::rpc::RpcClient>> {
+fn connect_rpc() -> Option<Rc<domlet::rpc::RpcClient>> {
     let location = web_sys::window()?.location();
     let scheme = if location.protocol().ok()?.as_str() == "https:" {
         "wss"
@@ -102,7 +103,7 @@ fn connect_rpc() -> Option<Rc<slint_dom::rpc::RpcClient>> {
         "ws"
     };
     let host = location.host().ok()?;
-    slint_dom::rpc::RpcClient::connect(&format!("{scheme}://{host}/rpc"))
+    domlet::rpc::RpcClient::connect(&format!("{scheme}://{host}/rpc"))
         .ok()
         .map(Rc::new)
 }

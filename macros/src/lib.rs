@@ -38,7 +38,7 @@ fn expand(relative: &str) -> Result<proc_macro2::TokenStream, String> {
 /// Frames a diagnostic so it stands out in long build output.
 fn framed(message: &str) -> String {
     let stars = "*".repeat(message.lines().next().map_or(20, |line| line.len()) + 2);
-    format!("slint-dom:\n{stars}\n{message}\n{stars}")
+    format!("domlet:\n{stars}\n{message}\n{stars}")
 }
 
 fn format_source_error(relative: &str, source: &str, error: parser::ParseError) -> String {

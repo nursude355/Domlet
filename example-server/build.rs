@@ -10,8 +10,8 @@ fn main() {
 
     let manifest = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest unavailable"));
     for asset in [
-        "../example/pkg/slint_dom_example.js",
-        "../example/pkg/slint_dom_example_bg.wasm",
+        "../example/pkg/domlet_example.js",
+        "../example/pkg/domlet_example_bg.wasm",
     ] {
         let path = manifest.join(asset);
         println!("cargo:rerun-if-changed={}", path.display());

@@ -1,15 +1,33 @@
-# slint-dom
+# Domlet
 
-`slint-dom` turns a small, web-focused subset of a `.slint` UI into ordinary
-browser DOM elements. The `.slint` parser is used only while compiling; it is
-not included in the deployed WebAssembly file.
+*We cooked. 🍳 Your `.slint` UI, served as plain DOM straight from the
+compiler.*
 
-It is intended for small Rust/WASM control panels, telemetry displays, and
-embedded-device web UIs that can run complex code (such as generating
-statistics or charts, coded in Rust) in the browser, and want to use the
-`.slint` language for the UI layout and styling without the full official
-Slint compilation. It generates DOM widgets instead of rendering widgets in
-WASM, which drastically reduces the size of the WASM binary.
+> `domlet` is an independent project. It is not affiliated with or
+> endorsed by Slint / SixtyFPS GmbH and contains no Slint code. The
+> [technical licensing overview](LICENSE-OVERVIEW.md) explains how domlet
+> differs from using the Slint framework.
+
+`domlet` is a Rust/WebAssembly library for small web UIs, such as the control
+panel that an embedded device (for example a Raspberry Pi Pico 2) serves to a
+browser. It turns a small, web-focused subset of a `.slint` UI into ordinary
+browser DOM elements. domlet has its own, independently written `.slint`
+parser (not Slint's). It runs only while compiling and is not included in the
+deployed WebAssembly file.
+
+## Why domlet
+
+Slint's own compiler is a great fit for desktop applications and for embedded
+devices with their own display. It can also build a web UI with WebAssembly,
+but that WASM file is too large for **small** embedded devices to store and
+serve: about 3.2 MB for our example UI (see the size comparison below).
+domlet is made for exactly this case: a small device serves a web UI, and
+GUI-related work, such as statistics or charts coded in Rust, runs in the
+browser instead of on the device's CPU.
+
+domlet reads the `.slint` language for the UI layout and styling, without the
+full official Slint compilation. It generates DOM widgets instead of rendering
+widgets in WASM, which drastically reduces the size of the WASM binary.
 
 A WASM example shows how to use the crate to create a simple line chart and
 some widgets with a `.slint` UI.
@@ -19,6 +37,61 @@ connect to. It shows sending unsolicited messages in both directions over
 WebSockets using an RPC protocol. The server example can be compiled for a
 desktop development computer as well as for a Raspberry Pi Pico 2 with the
 W5500 Ethernet module, and run on the device.
+
+## What domlet can do
+
+- **Write the UI in `.slint`**, compile it to real HTML elements: `Text`,
+  `Button`, `LineEdit`, `CheckBox`, `Slider`, `Image`, `Rectangle`,
+  `TouchArea`, vertical and horizontal layouts. A `Button` becomes a native
+  `<button>` and a `LineEdit` becomes an `<input>`, rather than a widget drawn
+  inside Slint's WebGL canvas.
+- **Browser-native styling and text**: use CSS and inspect individual widgets
+  with browser developer tools. The browser renders the text and controls;
+  Slint's documented browser backend draws them itself rather than using
+  DOM widgets and CSS.
+- **Use it from Rust**: `include_ui!` generates a typed component with getters,
+  setters, observable properties, and callback handlers.
+- **Two-way bindings** for text inputs, checkboxes, and sliders; `visible` and
+  `enabled` bindings, including `!property`.
+- **Sizes, colors, and accessibility**: Slint length units, hex colors,
+  screen-reader labels, roles, and live regions on real HTML elements.
+  domlet builds on native HTML semantics and ARIA; Slint currently documents
+  screen-reader accessibility as unavailable in its browser backend.
+- **Located compile errors**: unsupported input is rejected with file, line,
+  and column.
+- **Small output**: the parser runs only at compile time; the example UI ships
+  as roughly 160 kB of WebAssembly (WASM module only). Slint's browser build
+  includes its widget renderer; domlet uses the browser's built-in rendering
+  instead, keeping that drawing engine out of your application payload. In our
+  measurement (October 2026), the same `example/ui/main.slint` built with
+  Slint 1.18.1 for the browser was about 3.2 MB (1.3 MB gzip, after
+  `wasm-opt -Oz`), compared with about 160 kB (63 kB gzip, without `wasm-opt`)
+  for domlet's whole example, including its chart and RPC client. Both used
+  the same release profile (`opt-level = "z"`, LTO).
+- **Optional WebSocket/JSON-RPC client** for talking to a device, a lightweight
+  SVG line chart, and example servers for the desktop (Axum) and a Raspberry
+  Pi Pico 2 + W5500 (`no_std`, no heap).
+- **Aims at Slint compatibility**: the repository's test and example `.slint`
+  files are also compiled with the official Slint compiler in CI; known
+  differences are listed in the [guide](docs/guide.md#5-what-is-not-supported).
+
+How to write `.slint` files for domlet, what each declaration becomes in
+Rust, and the full list of supported features: see the
+[guide](docs/guide.md).
+
+The Slint comparisons above refer specifically to its Rust/WASM browser
+backend, as described in [Slint's official web-platform documentation](https://docs.slint.dev/latest/docs/slint/guide/platforms/web/).
+
+## Planned
+
+Not available yet:
+
+- Closing the remaining differences from Slint (`<=>` two-way bindings,
+  `@image-url`, element-specific properties).
+- Typed RPC: call a Rust function on the device from the browser
+  (`set_brightness(80).await`), and let the device call browser functions.
+- More elements and language features (for example `for` lists and `if`
+  conditions) where they map well to HTML.
 
 ## Quick start
 
@@ -61,7 +134,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-slint-dom = "0.2"
+domlet = "0.3"
 wasm-bindgen = "0.2"
 ```
 
@@ -95,7 +168,7 @@ Replace `src/lib.rs`:
 ```rust
 use wasm_bindgen::prelude::*;
 
-slint_dom::include_ui!("ui/main.slint");
+domlet::include_ui!("ui/main.slint");
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -104,14 +177,17 @@ pub fn start() -> Result<(), JsValue> {
     app.on_start(move || status.set("Running".into()));
 
     // Keep the generated component alive for the lifetime of the page.
-    std::mem::forget(app);
+    app.keep_alive();
     Ok(())
 }
 ```
 
 `include_ui!` generates the Rust type `MainWindow` from the `.slint` file.
 The UI becomes visible only when that generated component is mounted, here via
-`MainWindow::mount_to_body()`.
+`MainWindow::mount_to_body()`. Calling `keep_alive()` intentionally retains the
+component and its event bindings for a page-lifetime application. Applications
+that manage their own lifecycle should store the component and call `unmount()`
+when it is no longer needed.
 
 ### 5. Create the web page
 
@@ -184,7 +260,7 @@ The HTML loads the UI at runtime, so its source file stays small. If the page
 still fails, include the browser Console error and the wasm-pack output when
 reporting the problem.
 
-A runnable copy is in [`test-slint-dom-user/`](test-slint-dom-user/README.md).
+A runnable copy is in [`test-domlet-user/`](test-domlet-user/README.md).
 
 ## Supported `.slint` subset
 
@@ -196,17 +272,92 @@ and colors, `accessible-label`, `accessible-role`, `accessible-live-region`,
 and `!property` with `enabled` or `visible`. Slint enum values are unquoted:
 write `accessible-role: image;`, not `accessible-role: "image";`.
 
+Properties can be declared as `property`, `in property`, `out property`, or
+`in-out property`; domlet generates the same Rust API for all of them
+(`status()`, `set_status()`, `status_property()`). The official Slint
+compiler only exposes `in`, `out`, and `in-out` properties to Rust, so declare
+every property your Rust code uses with one of these if the same `.slint`
+file should also work with Slint. A value may name a property with or without
+`root.`: `text: root.status;` and `text: status;` are the same.
+
+Lengths use Slint units: `px`, `phx`, `rem`, `cm`, `mm`, `in`, `pt`, `%` (only
+on `width` and `height`, as in Slint), or a unitless `0`. CSS-only units such
+as `em`, `vh`, and `vw` are rejected. `phx` (physical pixels) is emitted as CSS
+`px`, so it matches Slint only at a device pixel ratio of 1. Colors are
+unquoted: `background: #eef4ff;` or a named color (`transparent`, `black`,
+`white`, `red`, `green`, `blue`), not `"#eef4ff"`.
+
+The repository's CI compiles its test and example `.slint` files with the
+official Slint compiler as well (`tests/slint-compat`).
+
 This is not a replacement for every Slint feature: callback parameters, general
-expressions, repeaters, conditionals, custom components, and arbitrary imports
-are deliberately rejected with compile-time errors.
+expressions, string interpolation (`"\{value}"`), repeaters, conditionals,
+custom components, and arbitrary imports are deliberately rejected with
+compile-time errors.
 
 ## Optional WebSocket/RPC
 
-Enable `slint-dom = { version = "0.2", features = ["rpc"] }` to use the small
-browser JSON-RPC 2.0 transport. The complete local server and command-line/
-telemetry example is in [`example-server/`](example-server/README.md). It can
-run either as a Tokio/Axum desktop server or as a `no_std`, no-heap Embassy
-server on a Raspberry Pi Pico 2 with W5500 Ethernet.
+Enable `domlet = { version = "0.3", features = ["rpc"] }` to use the small
+browser JSON-RPC 2.0 transport. Requests accept numeric or string IDs through
+`rpc::Id`, and incoming messages preserve either form. The complete local
+server and command-line/telemetry example is in
+[`example-server/`](example-server/README.md). It can run either as a
+Tokio/Axum desktop server or as a `no_std`, no-heap Embassy server on a
+Raspberry Pi Pico 2 with W5500 Ethernet.
+
+### Security: where the WebSocket connection fits, and where not
+
+The RPC connection has **no authentication and no encryption of its own**.
+Whoever can reach the device's WebSocket can call every method it offers.
+`ws://` sends everything as plain text; `wss://` is encrypted only if the
+server provides TLS (the example client picks `wss://` automatically when the
+page is loaded over `https://`).
+
+Browsers do not apply the same-origin policy to WebSockets: any website open in
+the user's browser can try to connect to `ws://<device>/rpc`. A server must
+therefore check the `Origin` header of the handshake. Both examples do:
+
+- the desktop example listens only on `127.0.0.1` and accepts only the pages
+  `http://127.0.0.1:8080` and `http://localhost:8080`;
+- the Pico 2 example (plain HTTP and WebSocket on port 80) accepts a browser
+  only if `Origin` is exactly `http://` plus the request's `Host`, so a page
+  from another site gets `403 Forbidden`.
+
+Both accept a handshake without `Origin`, so tools outside a browser keep
+working. That also means the `Origin` check is **not authentication**: a
+program outside the browser can omit or fake the header, and the check does not
+stop DNS rebinding (a hostile site that makes its own name point to the
+device's address).
+
+Fits well:
+
+- local development on `127.0.0.1`;
+- a device in a closed, trusted network: lab bench, machine-internal network,
+  isolated VLAN, or a direct cable to a service laptop;
+- read-only status and telemetry pages.
+
+Not without extra protection:
+
+- a device reachable from the internet;
+- a device in a network shared with many computers, if its methods change
+  something: every computer there, and every website open in a browser on one
+  of them, can reach it;
+- methods that change something physical (motors, heaters, valves, machine
+  settings) or anything safety-relevant.
+
+Extra protection for those cases, outside of domlet: put the device behind a
+VPN or a gateway/reverse proxy with TLS and login; check `Origin` on the
+device; validate every parameter on the device (a disabled button in the UI is
+no protection); keep secrets out of the WASM file, because anyone who loads
+the page can read it.
+
+Limits in the examples: messages are at most 1,024 bytes (larger ones close
+the connection). The Pico 2 sends a WebSocket ping and closes a connection
+whose peer does not answer within 10 s, so a closed tab or an unplugged cable
+frees one of its three connection slots after about 15-20 s; browsers answer
+these pings automatically. Neither example limits how many requests a client
+sends, and a client that keeps answering the pings can hold a slot as long as
+it wants.
 
 ## Before publishing an application
 
@@ -216,7 +367,7 @@ Run:
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-cargo test -p slint-dom-macros parser::tests
+cargo test -p domlet-macros parser::tests
 wasm-pack build --target web --release --out-dir pkg
 ```
 

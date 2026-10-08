@@ -1,5 +1,8 @@
 use crate::{
-    ast::{Callback, Component, Element, ElementProperty, Handler, Property, PropertyKind, Value},
+    ast::{
+        Callback, Component, Element, ElementId, ElementProperty, Handler, Property, PropertyKind,
+        Value,
+    },
     lexer::{lex_spanned, SpannedToken, Token},
 };
 
@@ -139,7 +142,7 @@ impl Parser {
             if self.current() == &Token::End {
                 return Err(self.error("unclosed component body"));
             }
-            if self.is_ident("property") {
+            if self.is_property_declaration() {
                 properties.push(self.property()?);
                 continue;
             }
@@ -192,8 +195,20 @@ impl Parser {
         })
     }
 
+    /// `property`, optionally preceded by Slint's `in`, `out`, or `in-out`.
+    fn is_property_declaration(&self) -> bool {
+        self.is_ident("property")
+            || (matches!(self.current(), Token::Ident(v) if matches!(v.as_str(), "in" | "out" | "in-out"))
+                && matches!(self.tokens.get(self.at + 1), Some((Token::Ident(v), _)) if v == "property"))
+    }
+
     fn property(&mut self) -> Result<Property, ParseError> {
         let offset = self.offset();
+        // All access qualifiers generate the same Rust API; `out` is not
+        // yet read-only from Rust.
+        if !self.is_ident("property") {
+            self.bump();
+        }
         self.bump();
         self.expect('<')?;
         let ty = self.ident()?;
@@ -238,7 +253,11 @@ impl Parser {
         let (id, kind, kind_offset) = if self.eat(':') {
             self.expect('=')?;
             let kind_offset = self.offset();
-            (Some(first), self.ident()?, kind_offset)
+            let id = ElementId {
+                offset: first_offset,
+                name: first,
+            };
+            (Some(id), self.ident()?, kind_offset)
         } else {
             (None, first, first_offset)
         };
@@ -289,10 +308,7 @@ impl Parser {
 
     fn handler(&mut self, event: String, offset: usize) -> Result<Handler, ParseError> {
         self.expect('{')?;
-        if self.is_ident("root") {
-            self.bump();
-            self.expect('.')?;
-        }
+        self.skip_root_qualifier();
         let callback = self.ident()?;
         self.expect('(')?;
         self.expect(')')?;
@@ -305,12 +321,24 @@ impl Parser {
         })
     }
 
+    /// Skips a `root.` qualifier: the root component's properties are the
+    /// only ones that can be bound, so `root.x` and `x` are the same.
+    fn skip_root_qualifier(&mut self) {
+        if self.is_ident("root") && self.next_is('.') {
+            self.bump();
+            self.bump();
+        }
+    }
+
     fn value(&mut self) -> Result<Value, ParseError> {
         if self.eat('!') {
+            self.skip_root_qualifier();
             return Ok(Value::NotIdentifier(self.ident()?));
         }
+        self.skip_root_qualifier();
         let value = match self.current().clone() {
             Token::String(v) => Value::String(v),
+            Token::Color(v) => Value::Color(v),
             Token::Ident(v) if v == "true" => Value::Bool(true),
             Token::Ident(v) if v == "false" => Value::Bool(false),
             Token::Ident(v) => Value::Identifier(v),
@@ -371,12 +399,61 @@ mod tests {
         .unwrap();
         assert_eq!(component.properties.len(), 1);
         assert_eq!(component.callbacks[0].name, "start");
-        assert_eq!(component.children[0].id.as_deref(), Some("layout"));
+        let id = component.children[0].id.as_ref().unwrap();
+        assert_eq!(id.name, "layout");
         assert_eq!(
             component.children[0].children[0].handlers[0].callback,
             "start"
         );
     }
+    #[test]
+    fn accepts_property_access_qualifiers() {
+        let component = parse(
+            "export component App { in property <bool> a; out property <int> b: 2; in-out property <string> c: \"x\"; property <float> d; }",
+        )
+        .unwrap();
+        let names: Vec<_> = component
+            .properties
+            .iter()
+            .map(|p| p.name.as_str())
+            .collect();
+        assert_eq!(names, ["a", "b", "c", "d"]);
+        assert_eq!(component.properties[1].initial, Value::Number("2".into()));
+        // A qualifier must be followed by `property`.
+        assert!(parse("export component App { in-out <bool> a; }").is_err());
+    }
+
+    #[test]
+    fn root_qualified_values_equal_unqualified_ones() {
+        let component = parse(
+            "export component App { property <bool> active; Text { visible: !root.active; enabled: root.active; } }",
+        )
+        .unwrap();
+        let values: Vec<_> = component.children[0]
+            .properties
+            .iter()
+            .map(|p| p.value.clone())
+            .collect();
+        assert_eq!(
+            values,
+            [
+                Value::NotIdentifier("active".into()),
+                Value::Identifier("active".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn element_ids_record_their_own_offset() {
+        let source = "export component App { start-button := Button {} }";
+        let element = &parse(source).unwrap().children[0];
+        assert_eq!(
+            element.id.as_ref().unwrap().offset,
+            source.find("start").unwrap()
+        );
+        assert_eq!(element.offset, source.find("Button").unwrap());
+    }
+
     #[test]
     fn wrong_initial_type_is_reported_at_the_property() {
         let source = "export component App {\n    property <int> count: \"x\";\n}";

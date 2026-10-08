@@ -59,14 +59,14 @@ Then build the firmware with Rust 1.93 or newer:
 ```powershell
 cargo build --manifest-path example-server/Cargo.toml `
   --no-default-features --features embedded `
-  --bin slint-dom-pico2-w5500 `
+  --bin domlet-pico2-w5500 `
   --target thumbv8m.main-none-eabihf --release --locked
 ```
 
 The ELF firmware is written to:
 
 ```text
-example-server/target/thumbv8m.main-none-eabihf/release/slint-dom-pico2-w5500
+example-server/target/thumbv8m.main-none-eabihf/release/domlet-pico2-w5500
 ```
 
 Flash it with an RP2350-compatible probe/runner. RTT output prints the DHCP
@@ -74,5 +74,10 @@ address as `open http://a.b.c.d`. Opening that address loads the same WASM UI
 from the Pico 2 and connects `/rpc` over WebSocket.
 
 This is a LAN integration reference, not an authenticated or TLS-enabled
-production server. The embedded example serves one connection at a time; after
-the browser assets are delivered, the WebSocket intentionally remains open.
+production server. It accepts the `/rpc` WebSocket only from its own page
+(`Origin` must match `http://` + `Host`), but that is no authentication, so use
+it only in a trusted network; see
+[Security](../README.md#security-where-the-websocket-connection-fits-and-where-not)
+in the main README. The embedded example serves up to three connections at a
+time; after the browser assets are delivered, the page's WebSocket stays open,
+and a connection whose peer stops answering pings is closed after 10 s.

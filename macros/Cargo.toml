@@ -1,8 +1,8 @@
 [package]
-name = "slint-dom-macros"
-description = "Compile-time component generator for slint-dom"
-repository = "https://github.com/nursude355/Slint_Dom"
-version = "0.2.0"
+name = "domlet-macros"
+description = "Compile-time .slint parser and Rust code generator for domlet (use the domlet crate)"
+repository = "https://github.com/nursude355/Domlet"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.81"

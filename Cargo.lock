@@ -48,6 +48,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "domlet"
+version = "0.3.0"
+dependencies = [
+ "domlet-macros",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+ "web-sys",
+]
+
+[[package]]
+name = "domlet-example"
+version = "0.1.0"
+dependencies = [
+ "domlet",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "domlet-macros"
+version = "0.3.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -242,36 +272,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
-name = "slint-dom"
-version = "0.2.0"
-dependencies = [
- "serde",
- "serde_json",
- "slint-dom-macros",
- "wasm-bindgen",
- "wasm-bindgen-test",
- "web-sys",
-]
-
-[[package]]
-name = "slint-dom-example"
-version = "0.1.0"
-dependencies = [
- "slint-dom",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
-name = "slint-dom-macros"
-version = "0.2.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "syn"
 version = "3.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -283,10 +283,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-slint-dom-user"
+name = "test-domlet-user"
 version = "0.1.0"
 dependencies = [
- "slint-dom",
+ "domlet",
  "wasm-bindgen",
 ]
 

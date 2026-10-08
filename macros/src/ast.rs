@@ -29,10 +29,18 @@ pub enum PropertyKind {
 pub struct Element {
     pub offset: usize,
     pub kind: String,
-    pub id: Option<String>,
+    pub id: Option<ElementId>,
     pub properties: Vec<ElementProperty>,
     pub handlers: Vec<Handler>,
     pub children: Vec<Element>,
+}
+
+/// An element id (`name := Kind { ... }`) with the source offset of `name`,
+/// so id diagnostics point at the id rather than at the element kind.
+#[derive(Debug, PartialEq)]
+pub struct ElementId {
+    pub offset: usize,
+    pub name: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,6 +66,8 @@ pub struct ElementProperty {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     String(String),
+    /// A color literal such as `#1a2b3c`, written without quotes.
+    Color(String),
     Bool(bool),
     Number(String),
     Identifier(String),

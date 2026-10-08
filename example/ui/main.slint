@@ -1,7 +1,7 @@
 import { Button, LineEdit, CheckBox, Slider } from "std-widgets.slint";
 
 export component MainWindow inherits Window {
-    title: "Slint DOM";
+    title: "Domlet";
     property <bool> enabled: true;
     property <string> status: "Ready";
     property <string> command: "";
@@ -12,7 +12,7 @@ export component MainWindow inherits Window {
     callback execute();
 
     VerticalLayout {
-        Text { text: status;  accessible-role: text; }
+        Text { text: status; accessible-role: text; accessible-live-region: polite; }
         HorizontalLayout {
             start-button := Button {
                 text: "Start";
