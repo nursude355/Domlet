@@ -5,21 +5,20 @@
 //! the WebAssembly binary.
 //!
 //! The crate is intended for small Rust/WASM control panels, telemetry
-//! displays, and embedded-devices' web UIs that can run complex code (such as
+//! displays, and embedded-device web UIs that can run complex code (such as
 //! generating statistics or charts, coded in Rust) in the browser, and want
-//! to use Slint for the UI layout and styling without doing the full official
-//! slint compilation, using DOM generated Widgets rather than WASM rendered
-//! Widgets and by that drastically reduces the size of the WASM binary.
+//! to use the `.slint` language for the UI layout and styling without the full
+//! official Slint compilation. It generates DOM widgets instead of rendering
+//! widgets in WASM, which drastically reduces the size of the WASM binary.
 //!
-//! A WASM example is provided that shows how to use the crate to create a simple
-//! line chart and some widgets with a Slint UI.
+//! A WASM example shows how to use the crate to create a simple line chart and
+//! some widgets with a `.slint` UI.
 //!
-//! A Server example is provided that creates a web server application that
-//! the WASM example can connect to and shows sending unsolicited messages
-//! in both directions via WebSockets using an RPC protocol.
-//! The server example can be compiled as well for a desktop development computer
-//! as for a Raspberry Pi Pico W with the W5500 ethernet module and run on the device.
-//!
+//! A server example provides a web server application that the WASM example
+//! can connect to. It shows sending unsolicited messages in both directions
+//! over WebSockets using an RPC protocol. The server example can be compiled
+//! for a desktop development computer as well as for a Raspberry Pi Pico 2
+//! with the W5500 Ethernet module, and run on the device.
 mod callback;
 mod chart;
 mod dom;
