@@ -4,7 +4,9 @@
 compiler.*
 
 > `domlet` is an independent project. It is not affiliated with or
-> endorsed by Slint / SixtyFPS GmbH and contains no Slint code.
+> endorsed by Slint / SixtyFPS GmbH and contains no Slint code. The
+> [technical licensing overview](LICENSE-OVERVIEW.md) explains how domlet
+> differs from using the Slint framework.
 
 `domlet` is a Rust/WebAssembly library for small web UIs, such as the control
 panel that an embedded device (for example a Raspberry Pi Pico 2) serves to a
