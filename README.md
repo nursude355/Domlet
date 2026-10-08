@@ -313,9 +313,19 @@ page is loaded over `https://`).
 
 Browsers do not apply the same-origin policy to WebSockets: any website open in
 the user's browser can try to connect to `ws://<device>/rpc`. A server must
-therefore check the `Origin` header of the handshake. The desktop example does
-this and listens only on `127.0.0.1`; the Pico 2 example serves plain HTTP and
-WebSocket on port 80 **without** an `Origin` check, as a LAN reference.
+therefore check the `Origin` header of the handshake. Both examples do:
+
+- the desktop example listens only on `127.0.0.1` and accepts only the pages
+  `http://127.0.0.1:8080` and `http://localhost:8080`;
+- the Pico 2 example (plain HTTP and WebSocket on port 80) accepts a browser
+  only if `Origin` is exactly `http://` plus the request's `Host`, so a page
+  from another site gets `403 Forbidden`.
+
+Both accept a handshake without `Origin`, so tools outside a browser keep
+working. That also means the `Origin` check is **not authentication**: a
+program outside the browser can omit or fake the header, and the check does not
+stop DNS rebinding (a hostile site that makes its own name point to the
+device's address).
 
 Fits well:
 
@@ -337,9 +347,15 @@ Extra protection for those cases, outside of domlet: put the device behind a
 VPN or a gateway/reverse proxy with TLS and login; check `Origin` on the
 device; validate every parameter on the device (a disabled button in the UI is
 no protection); keep secrets out of the WASM file, because anyone who loads
-the page can read it. The Pico 2 example works with fixed-size buffers; the
-desktop example keeps Axum's default message size limit, and neither example
-limits how many requests a client sends.
+the page can read it.
+
+Limits in the examples: messages are at most 1,024 bytes (larger ones close
+the connection). The Pico 2 sends a WebSocket ping and closes a connection
+whose peer does not answer within 10 s, so a closed tab or an unplugged cable
+frees one of its three connection slots after about 15-20 s; browsers answer
+these pings automatically. Neither example limits how many requests a client
+sends, and a client that keeps answering the pings can hold a slot as long as
+it wants.
 
 ## Before publishing an application
 

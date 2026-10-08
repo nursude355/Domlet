@@ -51,9 +51,17 @@ Semantic Versioning while its public API is still below 1.0.
 - `Property::set_if_changed` and `Property::try_set_if_changed` skip redundant
   observer notifications while preserving explicit update-cycle errors.
 - `rpc::Id` represents numeric and string JSON-RPC request identifiers.
+- The introduction on crates.io (README) and docs.rs describes what domlet is
+  for (small web UIs served by embedded devices), when to use Slint's own web
+  build instead, where the WebSocket RPC connection is safe to use, and links
+  the examples, which are not part of the published crate.
 
 ### Fixed
 
+- Example servers: the Pico 2 server now also rejects WebSocket handshakes
+  from other sites (`Origin` must match its own page) and closes connections
+  whose peer stops answering pings within 10 s; the desktop server limits RPC
+  messages to 1,024 bytes.
 - Element id errors (for example a duplicate id in `status := Text { ... }`)
   point at the id instead of at the element kind.
 - The example status text is again announced as a polite ARIA live region.
