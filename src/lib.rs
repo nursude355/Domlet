@@ -1,4 +1,5 @@
-//! Lightweight, web-native rendering for a focused subset of Slint.
+//! Small web UIs for embedded devices: a focused subset of the `.slint` UI
+//! language, compiled to native browser DOM with Rust/WASM.
 //!
 //! [`include_ui!`] reads a `.slint` file at compile time and generates a Rust
 //! component which creates ordinary DOM nodes. The parser is never linked into

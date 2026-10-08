@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2021"
 rust-version = "1.81"
 license = "MIT"
-description = "Compile a web-focused subset of the .slint UI language into lightweight native DOM components"
+description = "Small web UIs for embedded devices in Rust/WASM: compiles a subset of the .slint UI language into native browser DOM"
 repository = "https://github.com/nursude355/Domlet"
 documentation = "https://docs.rs/domlet"
 readme = "README.md"
@@ -19,7 +19,7 @@ include = [
     "docs/runtime-contract.md",
 ]
 keywords = ["wasm", "web", "gui", "dom", "embedded"]
-categories = ["gui", "web-programming", "wasm"]
+categories = ["gui", "web-programming", "wasm", "embedded"]
 
 [workspace]
 resolver = "2"

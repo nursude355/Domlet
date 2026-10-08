@@ -74,5 +74,8 @@ address as `open http://a.b.c.d`. Opening that address loads the same WASM UI
 from the Pico 2 and connects `/rpc` over WebSocket.
 
 This is a LAN integration reference, not an authenticated or TLS-enabled
-production server. The embedded example serves one connection at a time; after
+production server. It does not check the WebSocket `Origin` header, so use it
+only in a trusted network; see
+[Security](../README.md#security-where-the-websocket-connection-fits-and-where-not)
+in the main README. The embedded example serves one connection at a time; after
 the browser assets are delivered, the WebSocket intentionally remains open.

@@ -6,17 +6,26 @@ compiler.*
 > `domlet` is an independent project. It is not affiliated with or
 > endorsed by Slint / SixtyFPS GmbH and contains no Slint code.
 
-`domlet` turns a small, web-focused subset of a `.slint` UI into ordinary
+`domlet` is a Rust/WebAssembly library for small web UIs, such as the control
+panel that an embedded device (for example a Raspberry Pi Pico 2) serves to a
+browser. It turns a small, web-focused subset of a `.slint` UI into ordinary
 browser DOM elements. domlet has its own, independently written `.slint`
 parser (not Slint's). It runs only while compiling and is not included in the
 deployed WebAssembly file.
 
-It is intended for small Rust/WASM control panels, telemetry displays, and
-embedded-device web UIs that can run complex code (such as generating
-statistics or charts, coded in Rust) in the browser, and want to use the
-`.slint` language for the UI layout and styling without the full official
-Slint compilation. It generates DOM widgets instead of rendering widgets in
-WASM, which drastically reduces the size of the WASM binary.
+## Why domlet
+
+Slint's own compiler is a great fit for desktop applications and for embedded
+devices with their own display. It can also build a web UI with WebAssembly,
+but that WASM file is too large for **small** embedded devices to store and
+serve: about 3.2 MB for our example UI (see the size comparison below).
+domlet is made for exactly this case: a small device serves a web UI, and
+GUI-related work, such as statistics or charts coded in Rust, runs in the
+browser instead of on the device's CPU.
+
+domlet reads the `.slint` language for the UI layout and styling, without the
+full official Slint compilation. It generates DOM widgets instead of rendering
+widgets in WASM, which drastically reduces the size of the WASM binary.
 
 A WASM example shows how to use the crate to create a simple line chart and
 some widgets with a `.slint` UI.
@@ -293,6 +302,44 @@ server and command-line/telemetry example is in
 [`example-server/`](example-server/README.md). It can run either as a
 Tokio/Axum desktop server or as a `no_std`, no-heap Embassy server on a
 Raspberry Pi Pico 2 with W5500 Ethernet.
+
+### Security: where the WebSocket connection fits, and where not
+
+The RPC connection has **no authentication and no encryption of its own**.
+Whoever can reach the device's WebSocket can call every method it offers.
+`ws://` sends everything as plain text; `wss://` is encrypted only if the
+server provides TLS (the example client picks `wss://` automatically when the
+page is loaded over `https://`).
+
+Browsers do not apply the same-origin policy to WebSockets: any website open in
+the user's browser can try to connect to `ws://<device>/rpc`. A server must
+therefore check the `Origin` header of the handshake. The desktop example does
+this and listens only on `127.0.0.1`; the Pico 2 example serves plain HTTP and
+WebSocket on port 80 **without** an `Origin` check, as a LAN reference.
+
+Fits well:
+
+- local development on `127.0.0.1`;
+- a device in a closed, trusted network: lab bench, machine-internal network,
+  isolated VLAN, or a direct cable to a service laptop;
+- read-only status and telemetry pages.
+
+Not without extra protection:
+
+- a device reachable from the internet;
+- a device in a network shared with many computers, if its methods change
+  something: every computer there, and every website open in a browser on one
+  of them, can reach it;
+- methods that change something physical (motors, heaters, valves, machine
+  settings) or anything safety-relevant.
+
+Extra protection for those cases, outside of domlet: put the device behind a
+VPN or a gateway/reverse proxy with TLS and login; check `Origin` on the
+device; validate every parameter on the device (a disabled button in the UI is
+no protection); keep secrets out of the WASM file, because anyone who loads
+the page can read it. The Pico 2 example works with fixed-size buffers; the
+desktop example keeps Axum's default message size limit, and neither example
+limits how many requests a client sends.
 
 ## Before publishing an application
 

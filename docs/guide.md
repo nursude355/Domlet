@@ -238,6 +238,10 @@ The [`example-server`](https://github.com/nursude355/Domlet/blob/main/example-se
 shows a desktop server and a Raspberry Pi Pico 2 + W5500 firmware that serve
 the page and answer calls.
 
+The connection has no authentication or encryption of its own. Read
+[where it fits and where not](../README.md#security-where-the-websocket-connection-fits-and-where-not)
+before you control a real device with it.
+
 Today the calls are untyped (method names and JSON values). Typed calls in both
 directions (browser calls device functions, device calls browser functions) are
 being designed and are **not available yet**.
